@@ -506,6 +506,20 @@ export class TwitterPostClient {
 
             const topics = this.runtime.character.topics.join(", ");
             const maxTweetLength = this.client.twitterConfig.MAX_TWEET_LENGTH;
+            let news = undefined;
+            if (this.runtime.character.topics.includes("crypto currency news")){
+                const cryptoNewsResponse = await fetchCryptoNews();
+                for (const item of cryptoNewsResponse?.data.list){
+                    const itemKey = "crypto currency news:" + item.id;
+                    const exist = await this.runtime.cacheManager.get(itemKey)
+                    if (!exist){
+                        news = item;
+                        await this.runtime.cacheManager.set(itemKey, news);
+                        break;
+                    }
+                }
+                elizaLogger.info(`fetched sosovalue news, ${cryptoNewsResponse?.data.list.length}, ${news}`);
+            }
             const state = await this.runtime.composeState(
                 {
                     userId: this.runtime.agentId,
@@ -519,6 +533,9 @@ export class TwitterPostClient {
                 {
                     twitterUserName: this.client.profile.username,
                     maxTweetLength,
+                    newsContent: news?.content,
+                    newsTitle: news?.title,
+                    newsCurrency: news?.matchedCurrencies?.[0],
                 }
             );
 
@@ -529,7 +546,7 @@ export class TwitterPostClient {
                     twitterPostTemplate,
             });
 
-            elizaLogger.debug("generate post prompt:\n" + context);
+            elizaLogger.log("generate post prompt:\n" + context);
 
             const response = await generateText({
                 runtime: this.runtime,
@@ -962,8 +979,8 @@ export class TwitterPostClient {
                                 userId: this.runtime.agentId,
                                 roomId: stringToUuid(
                                     tweet.conversationId +
-                                        "-" +
-                                        this.runtime.agentId
+                                    "-" +
+                                    this.runtime.agentId
                                 ),
                                 agentId: this.runtime.agentId,
                                 content: {
@@ -978,11 +995,11 @@ export class TwitterPostClient {
                                 imageContext:
                                     imageDescriptions.length > 0
                                         ? `\nImages in Tweet:\n${imageDescriptions
-                                              .map(
-                                                  (desc, i) =>
-                                                      `Image ${i + 1}: ${desc}`
-                                              )
-                                              .join("\n")}`
+                                            .map(
+                                                (desc, i) =>
+                                                    `Image ${i + 1}: ${desc}`
+                                            )
+                                            .join("\n")}`
                                         : "",
                                 quotedContent,
                             }
@@ -1183,8 +1200,8 @@ export class TwitterPostClient {
                     imageContext:
                         imageDescriptions.length > 0
                             ? `\nImages in Tweet:\n${imageDescriptions
-                                  .map((desc, i) => `Image ${i + 1}: ${desc}`)
-                                  .join("\n")}`
+                                .map((desc, i) => `Image ${i + 1}: ${desc}`)
+                                .join("\n")}`
                             : "",
                     quotedContent,
                 }
@@ -1499,5 +1516,44 @@ export class TwitterPostClient {
                 }
             }
         }
+    }
+}
+
+
+// POST https://gw.sosovalue.com/contentAndSocial/content-news-cluster-do/v2/findPage
+// accept: application/json, text/plain, */*
+// accept-language: en
+// Content-Type: application/json;charset=UTF-8
+//
+// {"pageNum":0,"pageSize":10,"status":0}
+
+interface CryptoNewsResponse  {
+    code: number;
+    data: {
+        list: {
+            id: string;
+            title: string;
+            content: string;
+            matchedCurrencies: {name: string}[];
+            url: string;
+        }[];
+    }
+}
+
+async function fetchCryptoNews(){
+    try {
+        const response = await fetch("https://gw.sosovalue.com/contentAndSocial/content-news-cluster-do/v2/findPage", {
+            method: "POST",
+            headers: {
+                accept: "application/json, text/plain, */*",
+                "accept-language": "en",
+                "Content-Type": "application/json;charset=UTF-8",
+            },
+            body: JSON.stringify({ pageNum: 0, pageSize: 10, status: 0 }),
+        });
+        return await response.json() as CryptoNewsResponse;
+    }catch (error){
+        elizaLogger.error("Error fetching crypto news:", error);
+        return null;
     }
 }
