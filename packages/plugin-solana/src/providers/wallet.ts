@@ -429,16 +429,17 @@ const walletProvider: Provider = {
         _state?: State
     ): Promise<string | null> => {
         try {
-            const { publicKey } = await getWalletKey(runtime, false);
+            // const { publicKey } = await getWalletKey(runtime, false);
+            //
+            // const connection = new Connection(
+            //     runtime.getSetting("SOLANA_RPC_URL") ||
+            //         PROVIDER_CONFIG.DEFAULT_RPC
+            // );
+            elizaLogger.info("Wallet provider not implemented yet");
+            return "999"
+            // const provider = new WalletProvider(connection, publicKey);
 
-            const connection = new Connection(
-                runtime.getSetting("SOLANA_RPC_URL") ||
-                    PROVIDER_CONFIG.DEFAULT_RPC
-            );
-
-            const provider = new WalletProvider(connection, publicKey);
-
-            return await provider.getFormattedPortfolio(runtime);
+            // return await provider.getFormattedPortfolio(runtime);
         } catch (error) {
             elizaLogger.error("Error in wallet provider:", error);
             return null;

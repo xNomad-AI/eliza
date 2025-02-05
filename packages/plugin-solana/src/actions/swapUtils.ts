@@ -325,3 +325,9 @@ export const fetchSellTransaction = async (
         return null;
     }
 };
+
+import { createHash } from 'crypto';
+
+export function md5sum(data: string): string {
+    return createHash('md5').update(data).digest('hex');
+}
