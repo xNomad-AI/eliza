@@ -506,20 +506,33 @@ export class TwitterPostClient {
 
             const topics = this.runtime.character.topics.join(", ");
             const maxTweetLength = this.client.twitterConfig.MAX_TWEET_LENGTH;
-            let news = undefined;
-            if (this.runtime.character.topics.includes("crypto currency news")){
-                const cryptoNewsResponse = await fetchCryptoNews();
-                for (const item of cryptoNewsResponse?.data.list){
-                    const itemKey = "crypto currency news:" + item.id;
-                    const exist = await this.runtime.cacheManager.get(itemKey)
-                    if (!exist){
-                        news = item;
-                        await this.runtime.cacheManager.set(itemKey, news);
-                        break;
-                    }
-                }
-                elizaLogger.info(`fetched sosovalue news, ${cryptoNewsResponse?.data.list.length}, ${news}`);
+            let tokenTweets: {
+                symbol: string;
+                tweetContents: string[];
             }
+            if (this.runtime.character.topics.includes("crypto currency news")){
+                const trendingTokens = await getTrendingTokens(this.runtime.getSetting('BIRDEYE_API_KEY'));
+                for (const item of trendingTokens){
+                    const itemKey = "token:analysis:" + item.symbol;
+                    const postTime = await this.runtime.cacheManager.get(itemKey)
+                    if (postTime && (Date.now() - postTime) < 1000 * 60 * 60 * 12){
+                        continue
+                    }
+                    const pumpNewsApikey = this.runtime.getSetting('PUMPNEWS_API_KEY') || process.env?.PUMPNEWS_API_KEY;
+                    const tweets = await fetchPumpNews(pumpNewsApikey, item.address);
+                    if (!tweets || tweets.length < 8){
+                        continue
+                    }
+                    tokenTweets = {
+                        symbol: item.symbol,
+                        tweetContents:  tweets.map(tweet => tweet.text),
+                    }
+                    elizaLogger.log(`Found trending token:, ${item.symbol} with ${tweets.length} tweets`)
+                    await this.runtime.cacheManager.set(itemKey, Date.now())
+                    break;
+                }
+            }
+
             const state = await this.runtime.composeState(
                 {
                     userId: this.runtime.agentId,
@@ -533,12 +546,10 @@ export class TwitterPostClient {
                 {
                     twitterUserName: this.client.profile.username,
                     maxTweetLength,
-                    newsContent: news?.content,
-                    newsTitle: news?.title,
-                    newsCurrency: news?.matchedCurrencies?.[0],
+                    tokenSymbol: tokenTweets?.symbol,
+                    tweetContents: tokenTweets?.tweetContents,
                 }
             );
-
             const context = composeContext({
                 state,
                 template:
@@ -643,10 +654,10 @@ export class TwitterPostClient {
                     );
                 }
             } catch (error) {
-                elizaLogger.error("Error sending tweet:", error);
+                elizaLogger.error(`Error generating new tweet:", ${error}`);
             }
         } catch (error) {
-            elizaLogger.error("Error generating new tweet:", error);
+            elizaLogger.error(`Error generating new tweet:", ${error}`);
         }
     }
 
@@ -1554,6 +1565,62 @@ async function fetchCryptoNews(){
         return await response.json() as CryptoNewsResponse;
     }catch (error){
         elizaLogger.error("Error fetching crypto news:", error);
+        return null;
+    }
+}
+
+
+
+interface TokenTweet {
+    id: number;
+    token_address: string;
+    symbol: string;
+    network: string;
+    text: string;
+    favorite_count: number;
+    quote_count: number;
+    reply_count: number;
+    retweet_count: number;
+}
+
+
+async function getTrendingTokens(birdeypeApiKey:string): Promise<{
+    address: string;
+    symbol: string;
+    name: string;
+}[]> {
+    const url = "https://public-api.birdeye.so/defi/token_trending?sort_by=volume24hUSD&sort_type=desc&offset=0&limit=20";
+    try {
+        const response = await fetch(url, {
+            method: "GET",
+            headers: {
+                "X-API-KEY": birdeypeApiKey,
+                accept: "application/json",
+                "x-chain": "solana",
+            },
+        });
+        const result = await response.json();
+        return result?.data.tokens;
+    }catch (error) {
+        elizaLogger.error(`Error fetching trending tokens:, error`);
+        return null;
+    }
+}
+
+async function fetchPumpNews(apikey: string, token: string): Promise<TokenTweet[]> {
+    const url = `https://api.pump.news/tweets/list?tokenAddress=${token}&pageSize=20`;
+    try {
+        const response = await fetch(url, {
+            method: "GET",
+            headers: {
+                accept: "*/*",
+                apikey: apikey,
+            },
+        });
+        const result = await response.json();
+        return result?.data.tweets;
+    }catch (e){
+        elizaLogger.error(`Error fetching pump news: ${e}`,);
         return null;
     }
 }
