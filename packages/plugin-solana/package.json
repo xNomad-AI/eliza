@@ -20,9 +20,7 @@
 	],
 	"dependencies": {
 		"@coral-xyz/anchor": "0.30.1",
-		"@coral-xyz/anchor": "0.30.1",
 		"@elizaos/core": "workspace:*",
-		"@elizaos/plugin-tee": "workspace:*",
 		"@elizaos/plugin-tee": "workspace:*",
 		"@elizaos/plugin-trustdb": "workspace:*",
 		"@solana/spl-token": "0.4.9",
