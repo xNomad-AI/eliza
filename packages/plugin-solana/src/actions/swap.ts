@@ -59,7 +59,7 @@ async function swapToken(
 
         // auto slippage
         let url = `https://quote-api.jup.ag/v6/quote?inputMint=${inputTokenCA}&outputMint=${outputTokenCA}&amount=${adjustedAmount}&dynamicSlippage=true&autoSlippage=true&maxAccounts=64&onlyDirectRoutes=false&asLegacyTransaction=false`;
-        if (settings.JUP_SWAP_FEE_BPS !== undefined) {
+        if (settings.JUP_SWAP_FEE_BPS !== undefined && settings.JUP_SWAP_FEE_ACCOUNT !== undefined) {
             url += `&platformFeeBps=${settings.JUP_SWAP_FEE_BPS}`;
         }
 
@@ -73,32 +73,11 @@ async function swapToken(
             );
         }
 
-        // get or create fee token account
-        const { keypair } = await getWalletKey(runtime, true);
-        const FEE_ACCOUNT_INPUT_MINT_ACCOUNT = (
-            await getOrCreateAssociatedTokenAccount(
-              connection,
-              keypair,
-              new PublicKey(quoteData.inputMint),
-              new PublicKey(settings.JUP_SWAP_FEE_ACCOUNT),
-            )
-          ).address;
-
-        const FEE_ACCOUNT_OUTPUT_MINT_ACCOUNT = (
-            await getOrCreateAssociatedTokenAccount(
-                connection,
-                keypair,
-                new PublicKey(quoteData.outputMint),
-                new PublicKey(settings.JUP_SWAP_FEE_ACCOUNT)
-            )
-          ).address;
-
         const swapRequestBody = {
             quoteResponse: quoteData,
             userPublicKey: walletPublicKey.toString(),
             wrapAndUnwrapSol: true,
             dynamicComputeUnitLimit: true,
-            feeAccount: FEE_ACCOUNT_INPUT_MINT_ACCOUNT.toBase58(),
             dynamicSlippage: true,
             prioritizationFeeLamports: {
               priorityLevelWithMaxLamports: {
@@ -108,6 +87,30 @@ async function swapToken(
               }
             },
         };
+
+        // get or create fee token account
+        if (settings.JUP_SWAP_FEE_BPS !== undefined && settings.JUP_SWAP_FEE_ACCOUNT !== undefined) {
+            const { keypair } = await getWalletKey(runtime, true);
+            const FEE_ACCOUNT_INPUT_MINT_ACCOUNT = (
+                await getOrCreateAssociatedTokenAccount(
+                connection,
+                keypair,
+                new PublicKey(quoteData.inputMint),
+                new PublicKey(settings.JUP_SWAP_FEE_ACCOUNT),
+                )
+            ).address;
+
+            // const FEE_ACCOUNT_OUTPUT_MINT_ACCOUNT = (
+            //     await getOrCreateAssociatedTokenAccount(
+            //         connection,
+            //         keypair,
+            //         new PublicKey(quoteData.outputMint),
+            //         new PublicKey(settings.JUP_SWAP_FEE_ACCOUNT)
+            //     )
+            // ).address;
+
+            swapRequestBody['feeAccount'] = FEE_ACCOUNT_INPUT_MINT_ACCOUNT.toBase58();
+        }
 
         elizaLogger.log("Requesting swap with body:", swapRequestBody);
 
