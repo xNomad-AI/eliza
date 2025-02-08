@@ -1292,7 +1292,7 @@ export async function generateText({
 
         return response;
     } catch (error) {
-        elizaLogger.error("Error in generateText:", error);
+        elizaLogger.error(`Error in generateText ${error}`);
         throw error;
     }
 }

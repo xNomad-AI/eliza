@@ -215,18 +215,18 @@ export class MongoDBDatabaseAdapter
             await this.initializeStandardIndexes();
             await this.initializeVectorSearch();
 
-            try {
-                // Enable sharding for better performance
-                await this.database.command({
-                    enableSharding: this.database.databaseName
-                });
-                await this.database.command({
-                    shardCollection: `${this.database.databaseName}.memories`,
-                    key: { roomId: "hashed" }
-                });
-            } catch (error) {
-                console.log("Sharding may already be enabled or insufficient permissions", error);
-            }
+            // try {
+            //     // Enable sharding for better performance
+            //     // await this.database.command({
+            //     //     enableSharding: this.database.databaseName
+            //     // });
+            //     await this.database.command({
+            //         shardCollection: `${this.database.databaseName}.memories`,
+            //         key: { roomId: "hashed" }
+            //     });
+            // } catch (error) {
+            //     console.log("Sharding may already be enabled or insufficient permissions", error);
+            // }
 
             this.isConnected = true;
 

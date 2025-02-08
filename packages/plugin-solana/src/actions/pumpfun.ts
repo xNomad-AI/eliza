@@ -382,7 +382,8 @@ export default {
             const rpcUrl = runtime.getSetting("SOLANA_RPC_URL") || settings.SOLANA_RPC_URL;
             const connection = new Connection(rpcUrl, {
                 commitment: "confirmed",
-                confirmTransactionInitialTimeout: 500000, // 120 seconds
+                confirmTransactionInitialTimeout: 120000,
+                wsEndpoint: settings.SOLANA_RPC_URL!.replace("https", "wss"),
             });
 
             elizaLogger.log(

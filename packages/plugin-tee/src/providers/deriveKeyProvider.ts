@@ -24,19 +24,19 @@ class DeriveKeyProvider {
         switch (teeMode) {
             case TEEMode.LOCAL:
                 endpoint = "http://localhost:8090";
-                elizaLogger.log(
+                elizaLogger.debug(
                     "TEE: Connecting to local simulator at localhost:8090"
                 );
                 break;
             case TEEMode.DOCKER:
                 endpoint = "http://host.docker.internal:8090";
-                elizaLogger.log(
+                elizaLogger.debug(
                     "TEE: Connecting to simulator via Docker at host.docker.internal:8090"
                 );
                 break;
             case TEEMode.PRODUCTION:
                 endpoint = undefined;
-                elizaLogger.log(
+                elizaLogger.debug(
                     "TEE: Running in production mode without simulator"
                 );
                 break;
@@ -131,7 +131,7 @@ class DeriveKeyProvider {
                 agentId,
                 keypair.publicKey.toBase58()
             );
-            elizaLogger.log("Key Derived Successfully!");
+            elizaLogger.info(`Key Derived Successfully! , ${keypair.publicKey.toBase58()}`);
 
             return { keypair, attestation };
         } catch (error) {
