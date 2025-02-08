@@ -37,6 +37,7 @@ const PROVIDER_CONFIG = {
         Example: "2weMjPLLybRMMva1fM3U31goWWrCpF59CHWNhnCJ9Vyh",
     },
     TOKEN_SECURITY_ENDPOINT: "/defi/token_security?address=",
+    // https://docs.birdeye.so/reference/get_defi-v3-token-trade-data-single
     TOKEN_TRADE_DATA_ENDPOINT: "/defi/v3/token/trade-data/single?address=",
     DEX_SCREENER_API: "https://api.dexscreener.com/latest/dex/tokens/",
     MAIN_WALLET: "",

@@ -8,7 +8,7 @@ import {
 import { Connection, PublicKey } from "@solana/web3.js";
 import BigNumber from "bignumber.js";
 import NodeCache from "node-cache";
-import { getWalletKey } from "../keypairUtils";
+import { getWalletKey } from "../keypairUtils.ts";
 
 // Provider configuration
 const PROVIDER_CONFIG = {

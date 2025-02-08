@@ -1,5 +1,15 @@
 import {
-    type ActionExample,
+    Connection,
+    PublicKey,
+    RpcResponseAndContext,
+    SignatureStatus,
+    VersionedTransaction,
+} from "@solana/web3.js";
+import {
+    getOrCreateAssociatedTokenAccount,
+  } from "@solana/spl-token";
+import {
+    ActionExample,
     composeContext,
     generateObjectDeprecated,
     type HandlerCallback,
@@ -11,7 +21,6 @@ import {
     type Action,
     elizaLogger,
 } from "@elizaos/core";
-import { Connection, type PublicKey, VersionedTransaction } from "@solana/web3.js";
 import BigNumber from "bignumber.js";
 import { getWalletKey } from "../keypairUtils.ts";
 import { walletProvider, WalletProvider } from "../providers/wallet.ts";
@@ -22,7 +31,8 @@ async function swapToken(
     walletPublicKey: PublicKey,
     inputTokenCA: string,
     outputTokenCA: string,
-    amount: number
+    amount: number,
+    runtime: IAgentRuntime
 ): Promise<any> {
     try {
         // Get the decimals for the input token
@@ -47,9 +57,13 @@ async function swapToken(
             amount: adjustedAmount,
         });
 
-        const quoteResponse = await fetch(
-            `https://quote-api.jup.ag/v6/quote?inputMint=${inputTokenCA}&outputMint=${outputTokenCA}&amount=${adjustedAmount}&dynamicSlippage=true&maxAccounts=64`
-        );
+        // auto slippage
+        let url = `https://quote-api.jup.ag/v6/quote?inputMint=${inputTokenCA}&outputMint=${outputTokenCA}&amount=${adjustedAmount}&dynamicSlippage=true&autoSlippage=true&maxAccounts=64&onlyDirectRoutes=false&asLegacyTransaction=false`;
+        if (settings.JUP_SWAP_FEE_BPS !== undefined && settings.JUP_SWAP_FEE_ACCOUNT !== undefined) {
+            url += `&platformFeeBps=${settings.JUP_SWAP_FEE_BPS}`;
+        }
+
+        const quoteResponse = await fetch(url);
         const quoteData = await quoteResponse.json();
 
         if (!quoteData || quoteData.error) {
@@ -59,18 +73,44 @@ async function swapToken(
             );
         }
 
-        elizaLogger.log("Quote received:", quoteData);
-
         const swapRequestBody = {
             quoteResponse: quoteData,
-            userPublicKey: walletPublicKey.toBase58(),
+            userPublicKey: walletPublicKey.toString(),
+            wrapAndUnwrapSol: true,
             dynamicComputeUnitLimit: true,
             dynamicSlippage: true,
-            priorityLevelWithMaxLamports: {
+            prioritizationFeeLamports: {
+              priorityLevelWithMaxLamports: {
+                global: false,
                 maxLamports: 4000000,
-                priorityLevel: "veryHigh",
+                priorityLevel: "veryHigh"
+              }
             },
         };
+
+        // get or create fee token account
+        if (settings.JUP_SWAP_FEE_BPS !== undefined && settings.JUP_SWAP_FEE_ACCOUNT !== undefined) {
+            const { keypair } = await getWalletKey(runtime, true);
+            const FEE_ACCOUNT_INPUT_MINT_ACCOUNT = (
+                await getOrCreateAssociatedTokenAccount(
+                connection,
+                keypair,
+                new PublicKey(quoteData.inputMint),
+                new PublicKey(settings.JUP_SWAP_FEE_ACCOUNT),
+                )
+            ).address;
+
+            // const FEE_ACCOUNT_OUTPUT_MINT_ACCOUNT = (
+            //     await getOrCreateAssociatedTokenAccount(
+            //         connection,
+            //         keypair,
+            //         new PublicKey(quoteData.outputMint),
+            //         new PublicKey(settings.JUP_SWAP_FEE_ACCOUNT)
+            //     )
+            // ).address;
+
+            swapRequestBody['feeAccount'] = FEE_ACCOUNT_INPUT_MINT_ACCOUNT.toBase58();
+        }
 
         elizaLogger.log("Requesting swap with body:", swapRequestBody);
 
@@ -171,7 +211,7 @@ async function getTokenFromWallet(runtime: IAgentRuntime, tokenSymbol: string) {
 // swapToken should took CA, not symbol
 
 export const executeSwap: Action = {
-    name: "EXECUTE_SWAP",
+    name: "SWAP_TOKEN",
     similes: ["SWAP_TOKENS", "TOKEN_SWAP", "TRADE_TOKENS", "EXCHANGE_TOKENS"],
     validate: async (runtime: IAgentRuntime, message: Memory) => {
         // Check if the necessary parameters are provided in the message
@@ -179,6 +219,7 @@ export const executeSwap: Action = {
         return true;
     },
     description: "Perform a token swap.",
+    template: swapTemplate,
     handler: async (
         runtime: IAgentRuntime,
         message: Memory,
@@ -308,7 +349,8 @@ export const executeSwap: Action = {
                 walletPublicKey,
                 response.inputTokenCA as string,
                 response.outputTokenCA as string,
-                response.amount as number
+                response.amount as number,
+                runtime,
             );
 
             elizaLogger.log("Deserializing transaction...");
@@ -345,15 +387,29 @@ export const executeSwap: Action = {
 
             elizaLogger.log("Transaction sent:", txid);
 
-            // Confirm transaction using the blockhash
-            const confirmation = await connection.confirmTransaction(
-                {
-                    signature: txid,
-                    blockhash: latestBlockhash.blockhash,
-                    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-                },
-                "confirmed"
-            );
+            let confirmation: RpcResponseAndContext<SignatureStatus | null>;
+
+            // wait for 30s for the transaction to be processed
+            for (let i = 0; i < 30; i++) {
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+                confirmation = await connection.getSignatureStatus(txid, {
+                    searchTransactionHistory: false,
+                });
+
+                if (confirmation.value) {
+                    break;
+                }
+            }
+            // always timeout, so commented out
+            // const confirmation = await connection.confirmTransaction(
+            //     {
+            //         signature: txid,
+            //         blockhash: latestBlockhash.blockhash,
+            //         lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+            //     },
+            //     // if using confirmed, there will be an timeout
+            //     "recent"
+            // );
 
             if (confirmation.value.err) {
                 throw new Error(
@@ -387,6 +443,87 @@ export const executeSwap: Action = {
             {
                 user: "{{user1}}",
                 content: {
+                    text: "Initiating 1 ETH swap for DAI...",
+                    action: "SWAP_TOKEN",
+                },
+            },
+            {
+                user: "{{user2}}",
+                content: {
+                    text: "Swap in progress... Awaiting confirmation.",
+                    action: "SWAP_TOKEN",
+                },
+            },
+            {
+                user: "{{user2}}",
+                content: {
+                    text: "Swap completed. 1 ETH converted to 3000 DAI. Transaction ID: ...",
+                },
+            },
+        ],
+        [
+            {
+                user: "{{user1}}",
+                content: {
+                    text: "Swapping 0.5 BTC for USDT...",
+                    action: "SWAP_TOKEN",
+                },
+            },
+            {
+                user: "{{user2}}",
+                content: {
+                    text: "Transaction being processed...",
+                    action: "SWAP_TOKEN",
+                },
+            },
+            {
+                user: "{{user2}}",
+                content: {
+                    text: "BTC swapped successfully! 0.5 BTC for 12000 USDT. Transaction ID: ...",
+                },
+            },
+        ],
+        [
+            {
+                user: "{{user1}}",
+                content: {
+                    text: "Attempting to swap 10,000 USDT for 5,000 AAVE...",
+                    action: "SWAP_TOKEN",
+                },
+            },
+            {
+                user: "{{user2}}",
+                content: {
+                    text: "Swap completed! 10,000 USDT converted to 5,000 AAVE. Transaction ID: ...",
+                },
+            },
+        ],
+        [
+            {
+                user: "{{user1}}",
+                content: {
+                    text: "Starting 50 LINK to ETH swap...",
+                    action: "SWAP_TOKEN",
+                },
+            },
+            {
+                user: "{{user2}}",
+                content: {
+                    text: "Executing swap...",
+                    action: "SWAP_TOKEN",
+                },
+            },
+            {
+                user: "{{user2}}",
+                content: {
+                    text: "Swap success! 50 LINK converted to 5 ETH. Transaction ID: ...",
+                },
+            }
+        ],
+        [
+            {
+                user: "{{user1}}",
+                content: {
                     inputTokenSymbol: "SOL",
                     outputTokenSymbol: "USDC",
                     amount: 0.1,
@@ -396,7 +533,7 @@ export const executeSwap: Action = {
                 user: "{{user2}}",
                 content: {
                     text: "Swapping 0.1 SOL for USDC...",
-                    action: "TOKEN_SWAP",
+                    action: "SWAP_TOKEN",
                 },
             },
             {
