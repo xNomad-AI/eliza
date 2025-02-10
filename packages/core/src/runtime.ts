@@ -75,7 +75,7 @@ export class AgentRuntime implements IAgentRuntime {
      * Default count for recent messages to be kept in memory.
      * @private
      */
-    readonly #conversationLength = 32 as number;
+    readonly #conversationLength = 20 as number;
     /**
      * The ID of the agent
      */
@@ -353,7 +353,7 @@ export class AgentRuntime implements IAgentRuntime {
 
         this.serverUrl = opts.serverUrl ?? this.serverUrl;
 
-        elizaLogger.info(`${this.character.name}(${this.agentId}) - Setting Model Provider:`, {
+        elizaLogger.success(`${this.character.name}(${this.agentId}) - Setting Model Provider:`, {
             characterModelProvider: this.character.modelProvider,
             optsModelProvider: opts.modelProvider,
             currentModelProvider: this.modelProvider,
@@ -379,12 +379,12 @@ export class AgentRuntime implements IAgentRuntime {
           this.modelProvider
         );
 
-        elizaLogger.info(
+        elizaLogger.debug(
           `${this.character.name}(${this.agentId}) - Selected image model provider:`,
           this.imageModelProvider
         );
 
-        elizaLogger.info(
+        elizaLogger.debug(
             `${this.character.name}(${this.agentId}) - Selected image vision model provider:`,
             this.imageVisionModelProvider
         );
@@ -475,10 +475,10 @@ export class AgentRuntime implements IAgentRuntime {
             this.character.knowledge &&
             this.character.knowledge.length > 0
         ) {
-            elizaLogger.info(
+            elizaLogger.success(
                 `[RAG Check] RAG Knowledge enabled: ${this.character.settings.ragKnowledge ? true : false}`,
             );
-            elizaLogger.info(
+            elizaLogger.success(
                 `[RAG Check] Knowledge items:`,
                 this.character.knowledge,
             );
@@ -1000,7 +1000,7 @@ export class AgentRuntime implements IAgentRuntime {
                 .toLowerCase()
                 .replace("_", "");
 
-            elizaLogger.success(`Normalized action: ${normalizedAction}`);
+            elizaLogger.info(`Normalized action: ${normalizedAction}`);
 
             let action = this.actions.find(
                 (a: { name: string }) =>
@@ -1245,9 +1245,10 @@ export class AgentRuntime implements IAgentRuntime {
         additionalKeys: { [key: string]: unknown } = {},
     ) {
         const { userId, roomId } = message;
-
-        const conversationLength = this.getConversationLength();
-
+        let conversationLength = this.getConversationLength();
+        if (additionalKeys?.['conversationLength'] && typeof additionalKeys['conversationLength'] === 'number') {
+            conversationLength = additionalKeys['conversationLength'] as number;
+        }
         const [actorsData, recentMessagesData, goalsData]: [
             Actor[],
             Memory[],
@@ -1346,38 +1347,43 @@ Text: ${attachment.text}
             lore = selectedLore.join("\n");
         }
 
-        const formattedCharacterPostExamples = this.character.postExamples
-            .sort(() => 0.5 - Math.random())
-            .map((post) => {
-                const messageString = `${post}`;
-                return messageString;
-            })
-            .slice(0, 50)
-            .join("\n");
+        let formattedCharacterPostExamples = '';
+        if (Array.isArray(this.character.postExamples)){
+            const formattedCharacterPostExamples = (this.character.postExamples
+                ?.sort(() => 0.5 - Math.random())
+                .map((post) => {
+                    const messageString = `${post}`;
+                    return messageString;
+                })
+                .slice(0, 50)
+                .join("\n")) || '';
+        }
 
-        const formattedCharacterMessageExamples = this.character.messageExamples
-            .sort(() => 0.5 - Math.random())
-            .slice(0, 5)
-            .map((example) => {
-                const exampleNames = Array.from({ length: 5 }, () =>
-                    uniqueNamesGenerator({ dictionaries: [names] }),
-                );
+        let formattedCharacterMessageExamples = '';
+        if (Array.isArray(this.character.messageExamples)){
+            formattedCharacterMessageExamples = (this.character.messageExamples
+                ?.sort(() => 0.5 - Math.random())
+                .map((example) => {
+                    const exampleNames = Array.from({ length: 5 }, () =>
+                        uniqueNamesGenerator({ dictionaries: [names] }),
+                    );
 
-                return example
-                    .map((message) => {
-                        let messageString = `${message.user}: ${message.content.text}`;
-                        exampleNames.forEach((name, index) => {
-                            const placeholder = `{{user${index + 1}}}`;
-                            messageString = messageString.replaceAll(
-                                placeholder,
-                                name,
-                            );
-                        });
-                        return messageString;
-                    })
-                    .join("\n");
-            })
-            .join("\n\n");
+                    return example
+                        .map((message) => {
+                            let messageString = `${message.user}: ${message.content.text}`;
+                            exampleNames.forEach((name, index) => {
+                                const placeholder = `{{user${index + 1}}}`;
+                                messageString = messageString.replaceAll(
+                                    placeholder,
+                                    name,
+                                );
+                            });
+                            return messageString;
+                        })
+                        .join("\n");
+                })
+                .join("\n\n")) || '';
+        }
 
         const getRecentInteractions = async (
             userA: UUID,
@@ -1651,9 +1657,9 @@ Text: ${attachment.text}
                 getProviders(this, message, initialState),
             ]);
 
-        const evaluatorsData = resolvedEvaluators.filter(
-            Boolean,
-        ) as Evaluator[];
+        // const evaluatorsData = resolvedEvaluators.filter(
+        //     Boolean,
+        // ) as Evaluator[];
         const actionsData = resolvedActions.filter(Boolean) as Action[];
 
         const actionState = {
@@ -1670,22 +1676,22 @@ Text: ${attachment.text}
                 actionsData.length > 0
                     ? addHeader(
                           "# Action Examples",
-                          composeActionExamples(actionsData, 10),
+                          composeActionExamples(actionsData, 30),
                       )
                     : "",
-            evaluatorsData,
-            evaluators:
-                evaluatorsData.length > 0
-                    ? formatEvaluators(evaluatorsData)
-                    : "",
-            evaluatorNames:
-                evaluatorsData.length > 0
-                    ? formatEvaluatorNames(evaluatorsData)
-                    : "",
-            evaluatorExamples:
-                evaluatorsData.length > 0
-                    ? formatEvaluatorExamples(evaluatorsData)
-                    : "",
+            // evaluatorsData,
+            // evaluators:
+            //     evaluatorsData.length > 0
+            //         ? formatEvaluators(evaluatorsData)
+            //         : "",
+            // evaluatorNames:
+            //     evaluatorsData.length > 0
+            //         ? formatEvaluatorNames(evaluatorsData)
+            //         : "",
+            // evaluatorExamples:
+            //     evaluatorsData.length > 0
+            //         ? formatEvaluatorExamples(evaluatorsData)
+            //         : "",
             providers: addHeader(
                 `# Additional Information About ${this.character.name} and The World`,
                 providers,

@@ -153,6 +153,7 @@ async function truncateTiktoken(
         if (tokens.length <= maxTokens) {
             return context;
         }
+        elizaLogger.warn(`Context is too long, trimming tokens ${tokens.length}, max: ${maxTokens}`);
 
         // Keep the most recent tokens by slicing from the end
         const truncatedTokens = tokens.slice(-maxTokens);
@@ -369,7 +370,7 @@ export async function generateText({
 
     elizaLogger.log("Generating text...");
 
-    elizaLogger.info("Generating text with options:", {
+    elizaLogger.log("Generating text with options:", {
         modelProvider: runtime.modelProvider,
         model: modelClass,
         verifiableInference,
@@ -489,7 +490,7 @@ export async function generateText({
             break;
     }
 
-    elizaLogger.info("Selected model:", model);
+    elizaLogger.debug("Selected model:", model);
 
     const modelConfiguration = runtime.character?.settings?.modelConfig;
     const temperature =
@@ -511,10 +512,6 @@ export async function generateText({
     const apiKey = runtime.token;
 
     try {
-        elizaLogger.debug(
-            `Trimming context to max length of ${max_context_length} tokens.`
-        );
-
         context = await trimTokens(context, max_context_length, runtime);
 
         let response: string;
