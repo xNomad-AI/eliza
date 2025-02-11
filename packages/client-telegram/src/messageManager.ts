@@ -1389,13 +1389,13 @@ export class MessageManager {
                 // Update state after response
                 state = await this.runtime.updateRecentMessageState(state);
 
-                // Handle any resulting actions
-                await this.runtime.processActions(
-                    memory,
-                    responseMessages,
-                    state,
-                    callback
-                );
+                // // Handle any resulting actions
+                // await this.runtime.processActions(
+                //     memory,
+                //     responseMessages,
+                //     state,
+                //     callback
+                // );
             }
 
             await this.runtime.evaluate(memory, state, shouldRespond, callback);
