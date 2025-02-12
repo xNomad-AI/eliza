@@ -6,7 +6,6 @@ import { z } from "zod";
 import {
     type AgentRuntime,
     elizaLogger,
-    messageCompletionFooter,
     generateCaption,
     generateImage,
     type Media,
@@ -46,14 +45,10 @@ const storage = multer.diskStorage({
 // some people have more memory than disk.io
 const upload = multer({ storage /*: multer.memoryStorage() */ });
 
-export const messageHandlerTemplate =
-    // {{goals}}
-    // "# Action Examples" is already included
-    `{{actionExamples}}
-(Action examples are for reference only. Do not use the information from them in your response.)
+const messageHandlerTemplate = `
+# Knowledge
+{{knowledge}}
 
-
-# Task: Generate dialog and actions for the character {{agentName}}.
 About {{agentName}}:
 {{bio}}
 {{lore}}
@@ -64,15 +59,44 @@ About {{agentName}}:
 
 # Capabilities
 Note that {{agentName}} is capable of reading/seeing/hearing various forms of media, including images, videos, audio, plaintext and PDFs. Recent attachments have been included above under the "Attachments" section.
-
+Also Note {{agentName}} is an expert on Solana blockchain and has extensive knowledge of Solana transactions, including trading, swapping, and transferring.
 {{messageDirections}}
 
 {{recentMessages}}
 
 {{actions}}
 
-# Instructions: Write the next message for {{agentName}}.
-` + messageCompletionFooter;
+{{actionExamples}}
+- Note: Action examples are for reference only. Do not use the information from them in your response.
+
+# Task: Carefully read and understand the above conversation.Pay attention to distinguishing between completed conversations and new intent. Determine the appropriate action for the character {{agentName}} based on the user's intent.
+# Instructions: Write the next message for {{agentName}}. The message format should be a valid JSON block like this:
+\`\`\`
+json
+{
+    "user": "{{agentName}}",
+    "text": "<string>", 
+    "action": "<string>"
+}
+\`\`\`
+
+# Action Matching Rules:
+1. **Primary Analysis (Latest Message)**:
+   - Start by analyzing the latest message from the user to determine the user's current intent.
+   - If the user's intent is clear and directly matches an action in [Available Actions], set the action accordingly and keep the text concise (less than 10 words).
+
+2. **Contextual Analysis (Conversation History)**:
+   - If the latest message alone is not enough to determine the intent, review {{recentMessages}} to understand the context and infer the user's intent.
+   - If an action can be matched based on the conversation context, set the action and provide a concise text response.
+
+3. **Fallback Logic (None and Response Generation)**:
+   - If no action is matched after analyzing both the latest message and the conversation context, set action to "none".
+   - In this case, generate a relevant and context-aware text response to keep the conversation flowing naturally.
+
+4. **Error Handling and Re-evaluation**:
+   - If the latest agent message indicates a failed action (e.g., transaction error), re-evaluate the user's updated instructions and re-enter the actions flow.
+   - Avoid repeating the same error by considering the updated context and adjusting the response accordingly.
+`;
 
 export const hyperfiHandlerTemplate = `{{actionExamples}}
 (Action examples are for reference only. Do not use the information from them in your response.)
@@ -191,10 +215,16 @@ export class DirectClient {
             "/:agentId/message",
             upload.single("file"),
             async (req: express.Request, res: express.Response) => {
+                const messageStart = Date.now();
                 const agentId = req.params.agentId;
                 const roomId = stringToUuid(
                     req.body.roomId ?? "default-room-" + agentId
                 );
+                const accessToken = req.body.accessToken;
+                if (process.env?.ENABLE_CHAT_AUTH  == "true" && !accessToken){
+                    res.status(401).send("No accessToken provided");
+                    return;
+                }
                 const userId = stringToUuid(req.body.userId ?? "user");
 
                 let runtime = this.agents.get(agentId);
@@ -253,7 +283,7 @@ export class DirectClient {
                     text,
                     attachments,
                     source: "direct",
-                    accessToken: req.body?.accessToken,
+                    accessToken: accessToken,
                     inReplyTo: undefined,
                 };
 
@@ -273,10 +303,10 @@ export class DirectClient {
                     content,
                     createdAt: Date.now(),
                 };
-
-                await runtime.messageManager.addEmbeddingToMemory(memory);
+                // await runtime.messageManager.addEmbeddingToMemory(memory);
+                memory.embedding = await getEmbeddingZeroVector();
                 await runtime.messageManager.createMemory(memory);
-
+                console.log(`${messageId} Message creation elapsed: ${Date.now() - messageStart}ms`);
                 let state = await runtime.composeState(userMessage, {
                     agentName: runtime.character.name,
                 });
@@ -285,14 +315,14 @@ export class DirectClient {
                     state,
                     template: messageHandlerTemplate,
                 });
-
-                const response = await generateMessageResponse({
+                const aiResponseMessage = await generateMessageResponse({
                     runtime: runtime,
                     context,
                     modelClass: ModelClass.LARGE,
                 });
+                console.log(`${messageId} message query elapsed: ${Date.now() - messageStart}ms, context: ${context}, response: ${JSON.stringify(aiResponseMessage)}`);
 
-                if (!response) {
+                if (!aiResponseMessage) {
                     res.status(500).send(
                         "No response from generateMessageResponse"
                     );
@@ -300,53 +330,66 @@ export class DirectClient {
                 }
 
                 // save response to memory
-                const responseMessage: Memory = {
-                    id: stringToUuid(messageId + "-" + runtime.agentId),
+                const aiResponseMemory: Memory = {
+                    id: stringToUuid(Date.now().toString()),
                     ...userMessage,
                     userId: runtime.agentId,
-                    content: response,
+                    agentId: runtime.agentId,
+                    content: aiResponseMessage,
                     embedding: getEmbeddingZeroVector(),
                     createdAt: Date.now(),
                 };
 
-                await runtime.messageManager.createMemory(responseMessage);
-
-                state = await runtime.updateRecentMessageState(state);
-
-                let message = null as Content | null;
+                let actionResponseMessage = null as Content | null;
 
                 await runtime.processActions(
                     memory,
-                    [responseMessage],
+                    [aiResponseMemory],
                     state,
                     async (newMessages) => {
-                        message = newMessages;
+                        actionResponseMessage = newMessages;
                         return [memory];
                     }
                 );
+                console.log(`${messageId} message process elapsed: ${Date.now() - messageStart}ms`);
 
-                await runtime.evaluate(memory, state);
+                // await runtime.evaluate(memory, state);
 
-                // Check if we should suppress the initial message
+                // Check if we should suppress the initial actionMessage
                 const action = runtime.actions.find(
-                    (a) => a.name === response.action
+                    (a) => a.name === aiResponseMessage.action
                 );
+
                 const shouldSuppressInitialMessage =
                     action?.suppressInitialMessage;
+                if (actionResponseMessage){
+                    actionResponseMessage.action = action?.name;
+                }
+
+                const responseMessages = [];
 
                 if (!shouldSuppressInitialMessage) {
-                    if (message) {
-                        res.json([response, message]);
-                    } else {
-                        res.json([response]);
-                    }
-                } else {
-                    if (message) {
-                        res.json([message]);
-                    } else {
-                        res.json([]);
-                    }
+                    responseMessages.push(aiResponseMessage);
                 }
+
+                if (actionResponseMessage) {
+                    responseMessages.push(actionResponseMessage);
+                }
+                for (const m of responseMessages) {
+                    const resMemory : Memory = {
+                        id: stringToUuid(Date.now().toString()),
+                        roomId: userMessage.roomId,
+                        userId: runtime.agentId,
+                        agentId: runtime.agentId,
+                        content: m,
+                        embedding: getEmbeddingZeroVector(),
+                        createdAt: Date.now(),
+                    };
+                    state = await runtime.updateRecentMessageState(state);
+                    await runtime.messageManager.createMemory(resMemory, true);
+                }
+                console.log(`${messageId} message response elapsed: ${Date.now() - messageStart}ms`);
+                res.json(responseMessages);
             }
         );
 

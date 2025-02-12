@@ -1249,10 +1249,10 @@ export class AgentRuntime implements IAgentRuntime {
         if (additionalKeys?.['conversationLength'] && typeof additionalKeys['conversationLength'] === 'number') {
             conversationLength = additionalKeys['conversationLength'] as number;
         }
-        const [actorsData, recentMessagesData, goalsData]: [
+        const [actorsData, recentMessagesData]: [
             Actor[],
             Memory[],
-            Goal[],
+            // Goal[],
         ] = await Promise.all([
             getActorDetails({ runtime: this, roomId }),
             this.messageManager.getMemories({
@@ -1260,15 +1260,15 @@ export class AgentRuntime implements IAgentRuntime {
                 count: conversationLength,
                 unique: false,
             }),
-            getGoals({
-                runtime: this,
-                count: 10,
-                onlyInProgress: false,
-                roomId,
-            }),
+            // getGoals({
+            //     runtime: this,
+            //     count: 10,
+            //     onlyInProgress: false,
+            //     roomId,
+            // }),
         ]);
 
-        const goals = formatGoalsAsString({ goals: goalsData });
+        // const goals = formatGoalsAsString({ goals: goalsData });
 
         const actors = formatActors({ actors: actorsData ?? [] });
 
@@ -1348,16 +1348,16 @@ Text: ${attachment.text}
         }
 
         let formattedCharacterPostExamples = '';
-        if (Array.isArray(this.character.postExamples)){
-            const formattedCharacterPostExamples = (this.character.postExamples
-                ?.sort(() => 0.5 - Math.random())
-                .map((post) => {
-                    const messageString = `${post}`;
-                    return messageString;
-                })
-                .slice(0, 50)
-                .join("\n")) || '';
-        }
+        // if (Array.isArray(this.character.postExamples)){
+        //     formattedCharacterPostExamples = (this.character.postExamples
+        //         ?.sort(() => 0.5 - Math.random())
+        //         .map((post) => {
+        //             const messageString = `${post}`;
+        //             return messageString;
+        //         })
+        //         .slice(0, 50)
+        //         .join("\n")) || '';
+        // }
 
         let formattedCharacterMessageExamples = '';
         if (Array.isArray(this.character.messageExamples)){
@@ -1385,73 +1385,73 @@ Text: ${attachment.text}
                 .join("\n\n")) || '';
         }
 
-        const getRecentInteractions = async (
-            userA: UUID,
-            userB: UUID,
-        ): Promise<Memory[]> => {
-            // Find all rooms where userA and userB are participants
-            const rooms = await this.databaseAdapter.getRoomsForParticipants([
-                userA,
-                userB,
-            ]);
+        // const getRecentInteractions = async (
+        //     userA: UUID,
+        //     userB: UUID,
+        // ): Promise<Memory[]> => {
+        //     // Find all rooms where userA and userB are participants
+        //     const rooms = await this.databaseAdapter.getRoomsForParticipants([
+        //         userA,
+        //         userB,
+        //     ]);
+        //
+        //     // Check the existing memories in the database
+        //     return this.messageManager.getMemoriesByRoomIds({
+        //         // filter out the current room id from rooms
+        //         roomIds: rooms.filter((room) => room !== roomId),
+        //         limit: 20,
+        //     });
+        // };
 
-            // Check the existing memories in the database
-            return this.messageManager.getMemoriesByRoomIds({
-                // filter out the current room id from rooms
-                roomIds: rooms.filter((room) => room !== roomId),
-                limit: 20,
-            });
-        };
+        // const recentInteractions =
+        //     userId !== this.agentId
+        //         ? await getRecentInteractions(userId, this.agentId)
+        //         : [];
 
-        const recentInteractions =
-            userId !== this.agentId
-                ? await getRecentInteractions(userId, this.agentId)
-                : [];
+        // const getRecentMessageInteractions = async (
+        //     recentInteractionsData: Memory[],
+        // ): Promise<string> => {
+        //     // Format the recent messages
+        //     const formattedInteractions = await Promise.all(
+        //         recentInteractionsData.map(async (message) => {
+        //             const isSelf = message.userId === this.agentId;
+        //             let sender: string;
+        //             if (isSelf) {
+        //                 sender = this.character.name;
+        //             } else {
+        //                 const accountId =
+        //                     await this.databaseAdapter.getAccountById(
+        //                         message.userId,
+        //                     );
+        //                 sender = accountId?.username || "unknown";
+        //             }
+        //             return `${sender}: ${message.content.text}`;
+        //         }),
+        //     );
+        //
+        //     return formattedInteractions.join("\n");
+        // };
 
-        const getRecentMessageInteractions = async (
-            recentInteractionsData: Memory[],
-        ): Promise<string> => {
-            // Format the recent messages
-            const formattedInteractions = await Promise.all(
-                recentInteractionsData.map(async (message) => {
-                    const isSelf = message.userId === this.agentId;
-                    let sender: string;
-                    if (isSelf) {
-                        sender = this.character.name;
-                    } else {
-                        const accountId =
-                            await this.databaseAdapter.getAccountById(
-                                message.userId,
-                            );
-                        sender = accountId?.username || "unknown";
-                    }
-                    return `${sender}: ${message.content.text}`;
-                }),
-            );
+        // const formattedMessageInteractions =
+        //     await getRecentMessageInteractions(recentInteractions);
 
-            return formattedInteractions.join("\n");
-        };
+        // const getRecentPostInteractions = async (
+        //     recentInteractionsData: Memory[],
+        //     actors: Actor[],
+        // ): Promise<string> => {
+        //     const formattedInteractions = formatPosts({
+        //         messages: recentInteractionsData,
+        //         actors,
+        //         conversationHeader: true,
+        //     });
+        //
+        //     return formattedInteractions;
+        // };
 
-        const formattedMessageInteractions =
-            await getRecentMessageInteractions(recentInteractions);
-
-        const getRecentPostInteractions = async (
-            recentInteractionsData: Memory[],
-            actors: Actor[],
-        ): Promise<string> => {
-            const formattedInteractions = formatPosts({
-                messages: recentInteractionsData,
-                actors,
-                conversationHeader: true,
-            });
-
-            return formattedInteractions;
-        };
-
-        const formattedPostInteractions = await getRecentPostInteractions(
-            recentInteractions,
-            actorsData,
-        );
+        // const formattedPostInteractions = await getRecentPostInteractions(
+        //     recentInteractions,
+        //     actorsData,
+        // );
 
         // if bio is a string, use it. if its an array, pick one at random
         let bio = this.character.bio || "";
@@ -1463,27 +1463,29 @@ Text: ${attachment.text}
                 .join(" ");
         }
 
-        let knowledgeData = [];
-        let formattedKnowledge = "";
+        // let knowledgeData = [];
+        let formattedKnowledge = this.character.knowledge
+            .filter((item): item is string => typeof item === 'string')
+            .join('\n\n');
 
-        if (this.character.settings?.ragKnowledge) {
-            const recentContext = recentMessagesData
-                .slice(-3) // Last 3 messages
-                .map((msg) => msg.content.text)
-                .join(" ");
-
-            knowledgeData = await this.ragKnowledgeManager.getKnowledge({
-                query: message.content.text,
-                conversationContext: recentContext,
-                limit: 5,
-            });
-
-            formattedKnowledge = formatKnowledge(knowledgeData);
-        } else {
-            knowledgeData = await knowledge.get(this, message);
-
-            formattedKnowledge = formatKnowledge(knowledgeData);
-        }
+        // if (this.character.settings?.ragKnowledge) {
+        //     const recentContext = recentMessagesData
+        //         .slice(-3) // Last 3 messages
+        //         .map((msg) => msg.content.text)
+        //         .join(" ");
+        //
+        //     knowledgeData = await this.ragKnowledgeManager.getKnowledge({
+        //         query: message.content.text,
+        //         conversationContext: recentContext,
+        //         limit: 5,
+        //     });
+        //
+        //     formattedKnowledge = formatKnowledge(knowledgeData);
+        // } else {
+        //     knowledgeData = await knowledge.get(this, message);
+        //
+        //     formattedKnowledge = formatKnowledge(knowledgeData);
+        // }
 
         const initialState = {
             agentId: this.agentId,
@@ -1500,14 +1502,14 @@ Text: ${attachment.text}
                       ]
                     : "",
             knowledge: formattedKnowledge,
-            knowledgeData: knowledgeData,
-            ragKnowledgeData: knowledgeData,
+            // knowledgeData: knowledgeData,
+            // ragKnowledgeData: knowledgeData,
             // Recent interactions between the sender and receiver, formatted as messages
-            recentMessageInteractions: formattedMessageInteractions,
+            // recentMessageInteractions: formattedMessageInteractions,
             // Recent interactions between the sender and receiver, formatted as posts
-            recentPostInteractions: formattedPostInteractions,
+            // recentPostInteractions: formattedPostInteractions,
             // Raw memory[] array of interactions
-            recentInteractionsData: recentInteractions,
+            // recentInteractionsData: recentInteractions,
             // randomly pick one topic
             topic:
                 this.character.topics && this.character.topics.length > 0
@@ -1606,14 +1608,14 @@ Text: ${attachment.text}
                     : "",
             actorsData,
             roomId,
-            goals:
-                goals && goals.length > 0
-                    ? addHeader(
-                          "# Goals\n{{agentName}} should prioritize accomplishing the objectives that are in progress.",
-                          goals,
-                      )
-                    : "",
-            goalsData,
+            // goals:
+            //     goals && goals.length > 0
+            //         ? addHeader(
+            //               "# Goals\n{{agentName}} should prioritize accomplishing the objectives that are in progress.",
+            //               goals,
+            //           )
+            //         : "",
+            // goalsData,
             recentMessages:
                 recentMessages && recentMessages.length > 0
                     ? addHeader("# Conversation Messages", recentMessages)
@@ -1637,30 +1639,31 @@ Text: ${attachment.text}
             }
             return null;
         });
+        const resolvedActions =  await Promise.all(actionPromises);
+        const actionsData = resolvedActions.filter(Boolean) as Action[];
 
-        const evaluatorPromises = this.evaluators.map(async (evaluator) => {
-            const result = await evaluator.validate(
-                this,
-                message,
-                initialState,
-            );
-            if (result) {
-                return evaluator;
-            }
-            return null;
-        });
+        // const evaluatorPromises = this.evaluators.map(async (evaluator) => {
+        //     const result = await evaluator.validate(
+        //         this,
+        //         message,
+        //         initialState,
+        //     );
+        //     if (result) {
+        //         return evaluator;
+        //     }
+        //     return null;
+        // });
 
-        const [resolvedEvaluators, resolvedActions, providers] =
-            await Promise.all([
-                Promise.all(evaluatorPromises),
-                Promise.all(actionPromises),
-                getProviders(this, message, initialState),
-            ]);
+        // const [resolvedEvaluators, resolvedActions, providers] =
+        //     await Promise.all([
+        //         Promise.all(evaluatorPromises),
+        //         Promise.all(actionPromises),
+        //         getProviders(this, message, initialState),
+        //     ]);
 
         // const evaluatorsData = resolvedEvaluators.filter(
         //     Boolean,
         // ) as Evaluator[];
-        const actionsData = resolvedActions.filter(Boolean) as Action[];
 
         const actionState = {
             actionNames:
@@ -1692,10 +1695,10 @@ Text: ${attachment.text}
             //     evaluatorsData.length > 0
             //         ? formatEvaluatorExamples(evaluatorsData)
             //         : "",
-            providers: addHeader(
-                `# Additional Information About ${this.character.name} and The World`,
-                providers,
-            ),
+            // providers: addHeader(
+            //     `# Additional Information About ${this.character.name} and The World`,
+            //     providers,
+            // ),
         };
 
         return { ...initialState, ...actionState } as State;

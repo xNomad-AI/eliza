@@ -252,7 +252,7 @@ export class TwitterPostClient {
                 generateNewTweetLoop(); // Set up next iteration
             }, delay);
 
-            elizaLogger.log(`Next tweet scheduled in ${randomMinutes} minutes`);
+            elizaLogger.log(`${this.runtime.character.name}} Next tweet scheduled in ${randomMinutes} minutes`);
         };
 
         const processActionsLoop = async () => {
@@ -434,7 +434,7 @@ export class TwitterPostClient {
             }
             return body.data.create_tweet.tweet_results.result;
         } catch (error) {
-            elizaLogger.error("Error sending standard Tweet:", error);
+            elizaLogger.error(`${this.runtime.character.name} Error sending standard Tweet:`, error);
             throw error;
         }
     }
@@ -449,7 +449,7 @@ export class TwitterPostClient {
         mediaData?: MediaData[]
     ) {
         try {
-            elizaLogger.log(`Posting new tweet:\n`);
+            elizaLogger.log(`${this.runtime.character.name} Posting new tweet:\n`);
 
             let result;
 
@@ -483,7 +483,7 @@ export class TwitterPostClient {
                 rawTweetContent
             );
         } catch (error) {
-            elizaLogger.error("Error sending tweet:", error);
+            elizaLogger.error(`${this.runtime.character.name} Error sending tweet:`, error);
         }
     }
 
@@ -491,7 +491,7 @@ export class TwitterPostClient {
      * Generates and posts a new tweet. If isDryRun is true, only logs what would have been posted.
      */
     async generateNewTweet() {
-        elizaLogger.log("Generating new tweet");
+        elizaLogger.log(`${this.runtime.character.name} Generating new tweet`);
 
         try {
             const roomId = stringToUuid(
@@ -557,7 +557,7 @@ export class TwitterPostClient {
                     twitterPostTemplate,
             });
 
-            elizaLogger.log("generate post prompt:\n" + context);
+            elizaLogger.log(`${this.runtime.character.name} generate post prompt:\n` + context);
 
             const response = await generateText({
                 runtime: this.runtime,
@@ -622,7 +622,7 @@ export class TwitterPostClient {
 
             if (this.isDryRun) {
                 elizaLogger.info(
-                    `Dry run: would have posted tweet: ${tweetTextForPosting}`
+                    `${this.runtime.character.name} Dry run: would have posted tweet: ${tweetTextForPosting}`
                 );
                 return;
             }
@@ -641,7 +641,7 @@ export class TwitterPostClient {
                     elizaLogger.log("Tweet sent for approval");
                 } else {
                     elizaLogger.log(
-                        `Posting new tweet:\n ${tweetTextForPosting}`
+                        `${this.runtime.character.name} Posting new tweet:\n ${tweetTextForPosting}`
                     );
                     this.postTweet(
                         this.runtime,
@@ -654,10 +654,10 @@ export class TwitterPostClient {
                     );
                 }
             } catch (error) {
-                elizaLogger.error(`Error generating new tweet:", ${error}`);
+                elizaLogger.error(`${this.runtime.character.name} Error generating new tweet:", ${error}`);
             }
         } catch (error) {
-            elizaLogger.error(`Error generating new tweet:", ${error}`);
+            elizaLogger.error(`${this.runtime.character.name} Error generating new tweet:", ${error}`);
         }
     }
 
@@ -682,7 +682,7 @@ export class TwitterPostClient {
             modelClass: ModelClass.SMALL,
         });
 
-        elizaLogger.log("generate tweet content response:\n" + response);
+        elizaLogger.log(`${this.runtime.character.name} generate tweet content response:\n` + response);
 
         // First clean up any markdown and newlines
         const cleanedResponse = cleanJsonResponse(response);
@@ -737,7 +737,7 @@ export class TwitterPostClient {
      */
     private async processTweetActions() {
         if (this.isProcessing) {
-            elizaLogger.log("Already processing tweet actions, skipping");
+            elizaLogger.log(`${this.runtime.character.name} Already processing tweet actions, skipping`);
             return null;
         }
 

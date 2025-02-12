@@ -368,14 +368,13 @@ export async function generateText({
         return "";
     }
 
-    elizaLogger.log("Generating text...");
+    elizaLogger.debug(`Generating text, prompt: ${context}`);
 
-    elizaLogger.log("Generating text with options:", {
+    elizaLogger.debug("Generating text with options:", {
         modelProvider: runtime.modelProvider,
         model: modelClass,
         verifiableInference,
     });
-    elizaLogger.log("Using provider:", runtime.modelProvider);
     // If verifiable inference is requested and adapter is provided, use it
     if (verifiableInference && runtime.verifiableInferenceAdapter) {
         elizaLogger.log(

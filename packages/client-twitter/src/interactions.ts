@@ -116,7 +116,7 @@ export class TwitterInteractionClient {
     }
 
     async handleTwitterInteractions() {
-        elizaLogger.log("Checking Twitter interactions");
+        elizaLogger.log(`${this.runtime.character.name} Checking Twitter interactions`);
 
         const twitterUsername = this.client.profile.username;
         try {
@@ -130,7 +130,7 @@ export class TwitterInteractionClient {
             ).tweets;
 
             elizaLogger.log(
-                "Completed checking mentioned tweets:",
+                `${this.runtime.character.name} Completed checking mentioned tweets:`,
                 mentionCandidates.length
             );
             let uniqueTweetCandidates = [...mentionCandidates];
@@ -300,9 +300,9 @@ export class TwitterInteractionClient {
             // Save the latest checked tweet ID to the file
             await this.client.cacheLatestCheckedTweetId();
 
-            elizaLogger.log("Finished checking Twitter interactions");
+            elizaLogger.log(`${this.runtime.character.name} Finished checking Twitter interactions`);
         } catch (error) {
-            elizaLogger.error("Error handling Twitter interactions:", error);
+            elizaLogger.error(`${this.runtime.character.name} Error handling Twitter interactions:`, error);
         }
     }
 
@@ -326,7 +326,7 @@ export class TwitterInteractionClient {
             return { text: "", action: "IGNORE" };
         }
 
-        elizaLogger.log("Processing Tweet: ", tweet.id);
+        elizaLogger.log(`${this.runtime.character.name} Processing Tweet: `, tweet.id);
         const formatTweet = (tweet: Tweet) => {
             return `  ID: ${tweet.id}
   From: ${tweet.name} (@${tweet.username})
@@ -478,7 +478,7 @@ export class TwitterInteractionClient {
         if (response.text) {
             if (this.isDryRun) {
                 elizaLogger.info(
-                    `Dry run: Selected Post: ${tweet.id} - ${tweet.username}: ${tweet.text}\nAgent's Output:\n${response.text}`
+                    `${this.runtime.character.name} Dry run: Selected Post: ${tweet.id} - ${tweet.username}: ${tweet.text}\nAgent's Output:\n${response.text}`
                 );
             } else {
                 try {
@@ -518,14 +518,14 @@ export class TwitterInteractionClient {
                     const responseTweetId =
                     responseMessages[responseMessages.length - 1]?.content
                         ?.tweetId;
-                    await this.runtime.processActions(
-                        message,
-                        responseMessages,
-                        state,
-                        (response: Content) => {
-                            return callback(response, responseTweetId);
-                        }
-                    );
+                    // await this.runtime.processActions(
+                    //     message,
+                    //     responseMessages,
+                    //     state,
+                    //     (response: Content) => {
+                    //         return callback(response, responseTweetId);
+                    //     }
+                    // );
 
                     const responseInfo = `Context:\n\n${context}\n\nSelected Post: ${tweet.id} - ${tweet.username}: ${tweet.text}\nAgent's Output:\n${response.text}`;
 
@@ -535,7 +535,7 @@ export class TwitterInteractionClient {
                     );
                     await wait();
                 } catch (error) {
-                    elizaLogger.error(`Error sending response tweet: ${error}`);
+                    elizaLogger.error(`${this.runtime.character.name} Error sending response tweet: ${error}`);
                 }
             }
         }

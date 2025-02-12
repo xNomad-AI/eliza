@@ -5,8 +5,9 @@ export const messageCompletionFooter = `\nResponse format should be formatted in
 \`\`\`json
 { "user": "{{agentName}}", "text": "<string>", "action": "<string>" }
 \`\`\`
-
-The “action” field should be one of the options in [Available Actions] and the "text" field should be the response you want to send.
+The “action” field should be one of the options in [Available Actions]. If action field is one of the options in [Available Actions], the "text" field should be empty.
+If the user's request **does not match any of the above patterns**, set \`action\` to \`"none"\`.and the "text" field should be the response you want to send.
+The text field should avoid including any meaningless user identifier like "User77284b8d-4af4-0e7a-8c9a-cf16a67ebe2e"!
 `;
 
 export const shouldRespondFooter = `The available options are [RESPOND], [IGNORE], or [STOP]. Choose the most appropriate option.

@@ -396,32 +396,32 @@ export class MongoDBDatabaseAdapter
 
         await this.ensureConnection();
         try {
-            let isUnique = true;
-
-            if (memory.embedding) {
-                const similarMemories = await this.searchMemories(
-                    {
-                        tableName,
-                        roomId: memory.roomId,
-                        agentId: memory.agentId,
-                        embedding: memory.embedding,
-                        match_threshold: 0.95,
-                        match_count: 1,
-                        unique: isUnique
-                    }
-                )
-                // const similarMemories = await this.searchMemoriesByEmbedding(
-                //     memory.embedding,
-                //     {
-                //         tableName,
-                //         agentId: memory.agentId,
-                //         roomId: memory.roomId,
-                //         match_threshold: 0.95,
-                //         count: 1
-                //     }
-                // );
-                isUnique = similarMemories.length === 0;
-            }
+            // let isUnique = true;
+            //
+            // if (memory.embedding) {
+            //     // const similarMemories = await this.searchMemories(
+            //     //     {
+            //     //         tableName,
+            //     //         roomId: memory.roomId,
+            //     //         agentId: memory.agentId,
+            //     //         embedding: memory.embedding,
+            //     //         match_threshold: 0.95,
+            //     //         match_count: 1,
+            //     //         unique: isUnique
+            //     //     }
+            //     // )
+            //     // const similarMemories = await this.searchMemoriesByEmbedding(
+            //     //     memory.embedding,
+            //     //     {
+            //     //         tableName,
+            //     //         agentId: memory.agentId,
+            //     //         roomId: memory.roomId,
+            //     //         match_threshold: 0.95,
+            //     //         count: 1
+            //     //     }
+            //     // );
+            //     isUnique = similarMemories.length === 0;
+            // }
 
 
             const content = JSON.stringify(memory.content);
@@ -435,7 +435,7 @@ export class MongoDBDatabaseAdapter
                 userId: memory.userId,
                 roomId: memory.roomId,
                 agentId: memory.agentId,
-                unique: isUnique,
+                unique: false,
                 createdAt: new Date(createdAt)
             });
         }catch (e) {
