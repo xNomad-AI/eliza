@@ -289,17 +289,17 @@ function getCloudflareGatewayBaseURL(
     const cloudflareAccountId = runtime.getSetting("CLOUDFLARE_AI_ACCOUNT_ID");
     const cloudflareGatewayId = runtime.getSetting("CLOUDFLARE_AI_GATEWAY_ID");
 
-    elizaLogger.debug("Cloudflare Gateway Configuration:", {
-        isEnabled: isCloudflareEnabled,
-        hasAccountId: !!cloudflareAccountId,
-        hasGatewayId: !!cloudflareGatewayId,
-        provider: provider,
-    });
+    // elizaLogger.debug("Cloudflare Gateway Configuration:", {
+    //     isEnabled: isCloudflareEnabled,
+    //     hasAccountId: !!cloudflareAccountId,
+    //     hasGatewayId: !!cloudflareGatewayId,
+    //     provider: provider,
+    // });
 
-    if (!isCloudflareEnabled) {
-        elizaLogger.debug("Cloudflare Gateway is not enabled");
-        return undefined;
-    }
+    // if (!isCloudflareEnabled) {
+    //     elizaLogger.debug("Cloudflare Gateway is not enabled");
+    //     return undefined;
+    // }
 
     if (!cloudflareAccountId) {
         elizaLogger.warn(
@@ -489,7 +489,7 @@ export async function generateText({
             break;
     }
 
-    elizaLogger.debug("Selected model:", model);
+    // elizaLogger.debug("Selected model:", model);
 
     const modelConfiguration = runtime.character?.settings?.modelConfig;
     const temperature =
@@ -563,7 +563,7 @@ export async function generateText({
                 });
 
                 response = openaiResponse;
-                console.log("Received response from OpenAI model.");
+                elizaLogger.debug(`Received response from OpenAI model. ${response}`);
                 break;
             }
 
@@ -1513,6 +1513,8 @@ export async function generateObjectDeprecated({
             const parsedResponse = parseJSONObjectFromText(response);
             if (parsedResponse) {
                 return parsedResponse;
+            }else{
+                elizaLogger.warn(`Retrying generateText, Failed to parse response as JSON array: ${response}`);
             }
         } catch (error) {
             elizaLogger.error("Error in generateObject:", error);
