@@ -6,6 +6,7 @@ import { z } from "zod";
 import {
     type AgentRuntime,
     elizaLogger,
+    messageCompletionFooter,
     generateCaption,
     generateImage,
     type Media,
@@ -42,60 +43,227 @@ const storage = multer.diskStorage({
     },
 });
 
+function extractTransactionDetails(message) {
+    if (!message || !message.content || !message.content.text) {
+        return null;
+    }
+
+    const text = message.content.text;
+    const details = {
+        addresses: [],
+        tokens: [],
+        amounts: [],
+        actions: [],
+        timestamp: message.createdAt || Date.now(),
+    };
+
+    const addressRegex = /\b[1-9A-HJ-NP-Za-km-z]{32,44}\b/g;
+    const foundAddresses = text.match(addressRegex);
+    if (foundAddresses) {
+        details.addresses = [...foundAddresses];
+    }
+
+    const tokenRegex = /\b(SOL|USDC|USDT|BTC|ETH|[A-Z]{2,5})\b/g;
+    const foundTokens = text.match(tokenRegex);
+    if (foundTokens) {
+        details.tokens = [...foundTokens];
+    }
+
+    const amountRegex =
+        /\b\d+(\.\d+)?\s*(SOL|USDC|USDT|BTC|ETH|[A-Z]{2,5})?\b/g;
+    let match;
+    while ((match = amountRegex.exec(text)) !== null) {
+        details.amounts.push(match[0]);
+    }
+
+    const actionKeywords = [
+        "send",
+        "transfer",
+        "swap",
+        "buy",
+        "sell",
+        "claim",
+        "airdrop",
+        "create",
+        "mint",
+        "exchange",
+        "convert",
+        "trade",
+        "auto",
+    ];
+
+    for (const action of actionKeywords) {
+        if (text.toLowerCase().includes(action)) {
+            details.actions.push(action);
+        }
+    }
+
+    return Object.values(details).some((arr) => arr.length > 0)
+        ? details
+        : null;
+}
+
+function isRelevantMessage(
+    currentMessage,
+    historicalMessage,
+    transactionDetails
+) {
+    if (!historicalMessage || !historicalMessage.content) {
+        return false;
+    }
+
+    const messageAge =
+        (currentMessage.createdAt || Date.now()) -
+        (historicalMessage.createdAt || Date.now());
+    if (messageAge < 48 * 60 * 60 * 1000) {
+        return true;
+    }
+
+    if (!transactionDetails) {
+        return true;
+    }
+
+    const text = historicalMessage.content.text || "";
+
+    for (const address of transactionDetails.addresses) {
+        if (text.includes(address)) {
+            return true;
+        }
+    }
+
+    for (const token of transactionDetails.tokens) {
+        if (text.includes(token)) {
+            return true;
+        }
+    }
+
+    for (const action of transactionDetails.actions) {
+        if (text.toLowerCase().includes(action)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 // some people have more memory than disk.io
 const upload = multer({ storage /*: multer.memoryStorage() */ });
 
-const messageHandlerTemplate = `
-# Knowledge
-{{knowledge}}
+export const messageHandlerTemplate = ` 
+# Knowledge 
+{{knowledge}} 
+ 
+About {{agentName}}: 
+{{bio}} 
+{{lore}} 
+ 
+{{providers}} 
+ 
+{{attachments}} 
+ 
+# Capabilities 
+Note that {{agentName}} is capable of reading/seeing/hearing various forms of media, including images, videos, audio, plaintext and PDFs. Recent attachments have been included above under the "Attachments" section. 
+Also Note {{agentName}} is an expert on Solana blockchain and has extensive knowledge of Solana transactions, including trading, swapping, and transferring. 
+{{messageDirections}} 
+ 
+{{recentMessages}} 
+ 
+{{actions}} 
+ 
+{{actionExamples}} 
+- Note: Action examples are for reference only. Do not use the information from them in your response. 
+ 
+# Task: Carefully analyze the conversation context to determine the appropriate blockchain action for {{agentName}}.
 
-About {{agentName}}:
-{{bio}}
-{{lore}}
+# Instructions: Generate the next message for {{agentName}} in valid JSON format:
+\`\`\` 
+json 
+{ 
+    "user": "{{agentName}}", 
+    "text": "<string>",  
+    "action": "<string>" 
+} 
+\`\`\` 
+ 
+# Action Matching Framework:
 
-{{providers}}
+## 1. Intent Recognition (Primary Analysis)
+- Identify explicit action keywords and blockchain commands in the latest message
+- Map user intent to specific blockchain operations using this priority hierarchy:
+  * Direct commands: "create," "swap," "send," "transfer," "claim," "buy," "sell" 
+  * Object references: token names, wallet addresses, amounts
+  * Contextual clues: "airdrop," "liquidity," "transaction"
 
-{{attachments}}
+## 2. Parameter Extraction
+- For each potential action, identify if all required parameters are present:
+  * CLAIM_AIRDROP: airdrop identifier or source
+  * AUTO_TASK: token, price condition, time parameters
+  * CREATE_TOKEN: name, symbol, description, social links
+  * EXECUTE_SWAP: source token, target token, amount, slippage
+  * SEND_TOKEN: recipient address, token, amount
 
-# Capabilities
-Note that {{agentName}} is capable of reading/seeing/hearing various forms of media, including images, videos, audio, plaintext and PDFs. Recent attachments have been included above under the "Attachments" section.
-Also Note {{agentName}} is an expert on Solana blockchain and has extensive knowledge of Solana transactions, including trading, swapping, and transferring.
-{{messageDirections}}
+## 3. Context-Aware Validation
+- Review conversation history to resolve ambiguities and implicit references
+- Check for previously mentioned tokens, amounts, or addresses that apply to current intent
+- Verify if the user has already been informed about prerequisites (e.g., fees, confirmations)
+- Detect if the current message is responding to a previous action suggestion or error
 
-{{recentMessages}}
+## 4. Confidence-Based Decision
+- Assign confidence scores to potential actions based on:
+  * Parameter completeness (all required parameters identified)
+  * Intent clarity (direct command vs implied action)
+  * Contextual consistency (aligns with conversation flow)
+- Select the action with highest confidence score above threshold
 
-{{actions}}
+## 5. Response Generation Rules
+- For high-confidence action matches:
+  * Set appropriate action value
+  * Keep text response concise (<15 words) and confirmation-focused
+  * Include essential transaction details for verification
+- For medium-confidence matches:
+  * Set provisional action but request explicit confirmation
+  * List identified parameters for user verification
+- For low-confidence situations:
+  * Set action to "none"
+  * Generate contextually relevant response that either:
+    > Seeks clarification on specific missing parameters
+    > Suggests potential actions based on partial intent recognition
+    > Continues conversation naturally if no action intent detected
 
-{{actionExamples}}
-- Note: Action examples are for reference only. Do not use the information from them in your response.
+## 6. Error Recovery Protocol
+- If previous action failed, analyze error type:
+  * Parameter error: Request specific correction
+  * Authorization error: Prompt for authentication
+  * Blockchain error: Suggest alternative approaches
+  * Rate limit/timing error: Suggest retry parameters
+- Avoid repeating failed actions with identical parameters
 
-# Task: Carefully read and understand the above conversation.Pay attention to distinguishing between completed conversations and new intent. Determine the appropriate action for the character {{agentName}} based on the user's intent.
-# Instructions: Write the next message for {{agentName}}. The message format should be a valid JSON block like this:
-\`\`\`
-json
-{
-    "user": "{{agentName}}",
-    "text": "<string>", 
-    "action": "<string>"
-}
-\`\`\`
+# Specific Action Triggers:
 
-# Action Matching Rules:
-1. **Primary Analysis (Latest Message)**:
-   - Start by analyzing the latest message from the user to determine the user's current intent.
-   - If the user's intent is clear and directly matches an action in [Available Actions], set the action accordingly and keep the text concise (less than 10 words).
+1. CLAIM_AIRDROP: 
+   - Explicit mentions of "airdrop," "claim," "get tokens"
+   - References to specific airdrop campaigns or eligibility
+   - Questions about available airdrops
 
-2. **Contextual Analysis (Conversation History)**:
-   - If the latest message alone is not enough to determine the intent, review {{recentMessages}} to understand the context and infer the user's intent.
-   - If an action can be matched based on the conversation context, set the action and provide a concise text response.
+2. AUTO_TASK (AUTO_BUY/SELL/SWAP): 
+   - Conditional statements: "when price reaches," "if token goes above/below"
+   - Time-based requests: "in 2 hours," "every day," "schedule," "automated"
+   - Monitoring requests: "alert me," "watch for," "keep track of"
 
-3. **Fallback Logic (None and Response Generation)**:
-   - If no action is matched after analyzing both the latest message and the conversation context, set action to "none".
-   - In this case, generate a relevant and context-aware text response to keep the conversation flowing naturally.
+3. CREATE_TOKEN: 
+   - Direct creation intent: "make a token," "create coin," "launch token"
+   - Token parameter specification: naming, supply discussion, tokenomics
+   - References to pump.fun platform or meme tokens
 
-4. **Error Handling and Re-evaluation**:
-   - If the latest agent message indicates a failed action (e.g., transaction error), re-evaluate the user's updated instructions and re-enter the actions flow.
-   - Avoid repeating the same error by considering the updated context and adjusting the response accordingly.
+4. EXECUTE_SWAP: 
+   - Exchange terminology: "swap," "exchange," "trade," "convert"
+   - Pairing specifications: "X to Y," "for," "into"
+   - Amount specifications with token references
+
+5. SEND_TOKEN: 
+   - Transfer vocabulary: "send," "transfer," "pay," "withdraw"
+   - Recipient specification: addresses, names, "to wallet"
+   - Amount and token type specifications
 `;
 
 export const hyperfiHandlerTemplate = `{{actionExamples}}
@@ -220,7 +388,7 @@ export class DirectClient {
                 const roomId = stringToUuid(
                     req.body.roomId ?? "default-room-" + agentId
                 );
-                const accessToken = req.body.accessToken;
+                const accessToken = req.body?.accessToken;
                 if (process.env?.ENABLE_CHAT_AUTH  == "true" && !accessToken){
                     res.status(401).send("No accessToken provided");
                     return;
@@ -292,7 +460,29 @@ export class DirectClient {
                     userId,
                     roomId,
                     agentId: runtime.agentId,
+                    createdAt: Date.now(),
                 };
+
+                const transactionDetails =
+                    extractTransactionDetails(userMessage);
+
+                let runtimeTransactionContext =
+                    (await runtime.cacheManager.get(
+                        `transactionContext-${agentId}`
+                    )) || {};
+
+                if (transactionDetails) {
+                    runtimeTransactionContext[roomId] = {
+                        ...runtimeTransactionContext[roomId],
+                        ...transactionDetails,
+                        lastUpdated: Date.now(),
+                    };
+                    await runtime.cacheManager.set(
+                        `transactionContext-${agentId}`,
+                        runtimeTransactionContext,
+                        { expires: 60 * 60 * 24 }
+                    );
+                }
 
                 const memory: Memory = {
                     id: stringToUuid(messageId + "-" + userId),
@@ -303,7 +493,39 @@ export class DirectClient {
                     content,
                     createdAt: Date.now(),
                 };
-                // await runtime.messageManager.addEmbeddingToMemory(memory);
+
+                const originalComposeState = runtime.composeState;
+                runtime.composeState = async function (userMessage, options) {
+                    const state = await originalComposeState.call(
+                        this,
+                        userMessage,
+                        options
+                    );
+
+                    if (
+                        state.recentMessages &&
+                        Array.isArray(state.recentMessages)
+                    ) {
+                        const transactionContext =
+                            runtimeTransactionContext &&
+                            runtimeTransactionContext[userMessage.roomId];
+                        state.recentMessages = state.recentMessages.filter(
+                            (msg) =>
+                                isRelevantMessage(
+                                    userMessage,
+                                    msg,
+                                    transactionContext
+                                )
+                        );
+
+                        if (transactionContext) {
+                            state.transactionContext = transactionContext;
+                        }
+                    }
+
+                    return state;
+                };
+
                 memory.embedding = await getEmbeddingZeroVector();
                 await runtime.messageManager.createMemory(memory);
                 console.log(`${messageId} Message creation elapsed: ${Date.now() - messageStart}ms`);
@@ -311,9 +533,23 @@ export class DirectClient {
                     agentName: runtime.character.name,
                 });
 
+                runtime.composeState = originalComposeState;
+
+                let contextTemplate = messageHandlerTemplate;
+                if (state.transactionContext) {
+                    contextTemplate = messageHandlerTemplate.replace(
+                        "# Capabilities",
+                        `# Transaction Context\n${JSON.stringify(
+                            state.transactionContext,
+                            null,
+                            2
+                        )}\n\n# Capabilities`
+                    );
+                }
+
                 const context = composeContext({
                     state,
-                    template: messageHandlerTemplate,
+                    template: contextTemplate,
                 });
                 const aiResponseMessage = await generateMessageResponse({
                     runtime: runtime,
@@ -321,6 +557,8 @@ export class DirectClient {
                     modelClass: ModelClass.LARGE,
                 });
                 console.log(`${messageId} message query elapsed: ${Date.now() - messageStart}ms, context: ${context}, response: ${JSON.stringify(aiResponseMessage)}`);
+                console.log(`Action Prompt: ${context}`);
+                console.log("Generated response:", aiResponseMessage);
 
                 if (!aiResponseMessage) {
                     res.status(500).send(
@@ -351,21 +589,18 @@ export class DirectClient {
                         return [memory];
                     }
                 );
-                console.log(`${messageId} message process elapsed: ${Date.now() - messageStart}ms`);
-
+                console.log(`${messageId} message process elapsed: ${Date.now() - messageStart}ms`)
                 // await runtime.evaluate(memory, state);
 
                 // Check if we should suppress the initial actionMessage
                 const action = runtime.actions.find(
                     (a) => a.name === aiResponseMessage.action
                 );
-
                 const shouldSuppressInitialMessage =
                     action?.suppressInitialMessage;
                 if (actionResponseMessage){
                     actionResponseMessage.action = action?.name;
                 }
-
                 const responseMessages = [];
 
                 if (!shouldSuppressInitialMessage) {
@@ -501,13 +736,13 @@ export class DirectClient {
                                       nearby.map((item) => z.literal(item)) as [
                                           z.ZodLiteral<string>,
                                           z.ZodLiteral<string>,
-                                          ...z.ZodLiteral<string>[],
+                                          ...z.ZodLiteral<string>[]
                                       ]
                                   )
                                   .nullable()
                             : nearby.length === 1
-                              ? z.literal(nearby[0]).nullable()
-                              : z.null(); // Fallback for empty array
+                            ? z.literal(nearby[0]).nullable()
+                            : z.null(); // Fallback for empty array
 
                     const emoteSchema =
                         availableEmotes.length > 1
@@ -518,13 +753,13 @@ export class DirectClient {
                                       ) as [
                                           z.ZodLiteral<string>,
                                           z.ZodLiteral<string>,
-                                          ...z.ZodLiteral<string>[],
+                                          ...z.ZodLiteral<string>[]
                                       ]
                                   )
                                   .nullable()
                             : availableEmotes.length === 1
-                              ? z.literal(availableEmotes[0]).nullable()
-                              : z.null(); // Fallback for empty array
+                            ? z.literal(availableEmotes[0]).nullable()
+                            : z.null(); // Fallback for empty array
 
                     return z.object({
                         lookAt: lookAtSchema,
@@ -721,7 +956,9 @@ export class DirectClient {
 
                     if (!fileResponse.ok) {
                         throw new Error(
-                            `API responded with status ${fileResponse.status}: ${await fileResponse.text()}`
+                            `API responded with status ${
+                                fileResponse.status
+                            }: ${await fileResponse.text()}`
                         );
                     }
 
