@@ -404,19 +404,6 @@ export async function generateText({
     }
 
     const provider = runtime.modelProvider;
-    elizaLogger.debug("Provider settings:", {
-        provider,
-        hasRuntime: !!runtime,
-        runtimeSettings: {
-            CLOUDFLARE_GW_ENABLED: runtime.getSetting("CLOUDFLARE_GW_ENABLED"),
-            CLOUDFLARE_AI_ACCOUNT_ID: runtime.getSetting(
-                "CLOUDFLARE_AI_ACCOUNT_ID"
-            ),
-            CLOUDFLARE_AI_GATEWAY_ID: runtime.getSetting(
-                "CLOUDFLARE_AI_GATEWAY_ID"
-            ),
-        },
-    });
 
     const endpoint =
         runtime.character.modelEndpointOverride || getEndpoint(provider);
@@ -1586,7 +1573,6 @@ export async function generateMessageResponse({
     const max_context_length = modelSettings.maxInputTokens;
 
     context = await trimTokens(context, max_context_length, runtime);
-    elizaLogger.debug("Context:", context);
     let retryLength = 1000; // exponential backoff
     while (true) {
         try {

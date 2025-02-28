@@ -189,9 +189,9 @@ json
 ## 1. Intent Recognition (Primary Analysis)
 - Identify explicit action keywords and blockchain commands in the latest message
 - Map user intent to specific blockchain operations using this priority hierarchy:
-  * Direct commands: "create," "swap," "send," "transfer," "claim," "buy," "sell" 
+  * Direct commands: "create," "swap," "send," "transfer," "claim," "buy," "sell", "sell all" 
   * Object references: token names, wallet addresses, amounts
-  * Contextual clues: "airdrop," "liquidity," "transaction"
+  * Contextual clues: "airdrop," "liquidity," "transaction", "analyze"
 
 ## 2. Parameter Extraction
 - For each potential action, identify if all required parameters are present:
@@ -200,6 +200,7 @@ json
   * CREATE_TOKEN: name, symbol, description, social links
   * EXECUTE_SWAP: source token, target token, amount, slippage
   * SEND_TOKEN: recipient address, token, amount
+  * ANALYZE: token symbol or token address
 
 ## 3. Context-Aware Validation
 - Review conversation history to resolve ambiguities and implicit references
@@ -255,7 +256,7 @@ json
    - References to pump.fun platform or meme tokens
 
 4. EXECUTE_SWAP: 
-   - Exchange terminology: "swap," "exchange," "trade," "convert"
+   - Exchange terminology: "swap," "exchange," "trade," "convert", "sell", "buy"
    - Pairing specifications: "X to Y," "for," "into"
    - Amount specifications with token references
 
@@ -263,6 +264,15 @@ json
    - Transfer vocabulary: "send," "transfer," "pay," "withdraw"
    - Recipient specification: addresses, names, "to wallet"
    - Amount and token type specifications
+   
+6. ANALYZE:
+   - Explicit mentions of "analyze," "check," "review," "inspect"
+    - Token symbol or address references for analysis
+    
+7. WALLET_PORTFOLIO:
+    - Direct requests for wallet status: "show my wallet," "portfolio"
+    - Balance inquiries: "how much do I have," "what's in your wallet"
+    - Token-specific balance checks
 `;
 
 export const hyperfiHandlerTemplate = `{{actionExamples}}
@@ -553,8 +563,6 @@ export class DirectClient {
                     modelClass: ModelClass.LARGE,
                 });
                 console.log(`${messageId} message query elapsed: ${Date.now() - messageStart}ms, context: ${context}, response: ${JSON.stringify(aiResponseMessage)}`);
-                console.log(`Action Prompt: ${context}`);
-                console.log("Generated response:", aiResponseMessage);
 
                 if (!aiResponseMessage) {
                     res.status(500).send(

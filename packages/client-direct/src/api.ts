@@ -247,6 +247,8 @@ export function createApiRouter(
             roomId: null,
         };
         if (!agentId || !roomId) return;
+        const end = req.query.end? Number(req.query.end) : new Date().getTime();
+        const count = Number(req.query.count) || 20;
 
         let runtime = agents.get(agentId);
 
@@ -266,6 +268,8 @@ export function createApiRouter(
             const memories = await runtime.messageManager.getMemories({
                 roomId,
                 unique: false,
+                count,
+                end,
             });
             const response = {
                 agentId,
@@ -276,6 +280,7 @@ export function createApiRouter(
                     agentId: memory.agentId,
                     createdAt: memory.createdAt,
                     content: {
+                        ...memory.content,
                         text: memory.content.text,
                         action: memory.content.action,
                         source: memory.content.source,
