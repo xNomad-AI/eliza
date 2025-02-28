@@ -190,6 +190,7 @@ json
 - Identify explicit action keywords and blockchain commands in the latest message
 - Map user intent to specific blockchain operations using this priority hierarchy:
   * Direct commands: "create," "swap," "send," "transfer," "claim," "buy," "sell", "sell all" 
+  * Confirmation responses: "yes", "confirm", "ok", "proceed", "continue"
   * Object references: token names, wallet addresses, amounts
   * Contextual clues: "airdrop," "liquidity," "transaction", "analyze"
 
@@ -201,12 +202,19 @@ json
   * EXECUTE_SWAP: source token, target token, amount, slippage
   * SEND_TOKEN: recipient address, token, amount
   * ANALYZE: token symbol or token address
+- For confirmation messages:
+  * Check previous action context
+  * Maintain the same action type for confirmations
+  * EXECUTE_SWAP confirmations should never trigger SEND_TOKEN
 
 ## 3. Context-Aware Validation
 - Review conversation history to resolve ambiguities and implicit references
 - Check for previously mentioned tokens, amounts, or addresses that apply to current intent
 - Verify if the user has already been informed about prerequisites (e.g., fees, confirmations)
 - Detect if the current message is responding to a previous action suggestion or error
+- For confirmation messages, always maintain the original action type
+- Prioritize maintaining action context over new action detection
+- For EXECUTE_SWAP flows, ignore transfer-related keywords in confirmation messages
 
 ## 4. Confidence-Based Decision
 - Assign confidence scores to potential actions based on:
