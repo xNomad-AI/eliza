@@ -298,10 +298,11 @@ export function createApiRouter(
                             })
                         ),
                     },
-                    embedding: memory.embedding,
+                    // embedding: memory.embedding,
                     roomId: memory.roomId,
                     unique: memory.unique,
-                    similarity: memory.similarity,
+                    accessToken: null,
+                    // similarity: memory.similarity,
                 })),
             };
 
