@@ -549,7 +549,7 @@ export class DirectClient {
 
                 runtime.composeState = originalComposeState;
 
-                let contextTemplate = messageHandlerTemplate;
+                let contextTemplate = runtime.character.templates.messageHandlerTemplate || messageHandlerTemplate;
                 if (state.transactionContext) {
                     contextTemplate = messageHandlerTemplate.replace(
                         "# Capabilities",

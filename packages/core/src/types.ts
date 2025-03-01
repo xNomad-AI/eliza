@@ -456,6 +456,17 @@ export interface Action {
 
     /** Whether to suppress the initial message when this action is used */
     suppressInitialMessage?: boolean;
+    functionCallSpec?: {
+        name: string;
+        strict: boolean;
+        additionalProperties: boolean;
+        description: string;
+        parameters: {
+            type: string;
+            properties: { [key: string ]: { type: string | any[]; description: string } };
+            required: string[];
+        };
+    };
 }
 
 /**
