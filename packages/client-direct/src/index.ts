@@ -48,6 +48,7 @@ function extractTransactionDetails(message) {
     }
 
     const text = message.content.text;
+
     const confirmationKeywords = [
         'yes',
         'ok',
@@ -75,25 +76,66 @@ function extractTransactionDetails(message) {
     const details = {
         addresses: [],
         tokens: [],
+        targetTokens: [],
+        targetAddresses: [],
         amounts: [],
         actions: [],
         timestamp: message.createdAt || Date.now(),
+        originalText: text,
     };
 
     const addressRegex = /\b[1-9A-HJ-NP-Za-km-z]{32,44}\b/g;
     const foundAddresses = text.match(addressRegex);
     if (foundAddresses) {
         details.addresses = [...foundAddresses];
+
+        if (
+            foundAddresses.length > 1 &&
+            (text.includes(' for ') || text.includes(' to '))
+        ) {
+            const forIndex = Math.max(
+                text.indexOf(' for '),
+                text.indexOf(' to '),
+            );
+            const addressesAfterFor = foundAddresses.filter(
+                (addr) => text.indexOf(addr) > forIndex,
+            );
+            if (addressesAfterFor.length > 0) {
+                details.targetAddresses = addressesAfterFor;
+            }
+        }
     }
 
-    const tokenRegex = /\b(SOL|USDC|USDT|BTC|ETH|[A-Z]{2,5})\b/g;
+    const tokenRegex = /\b(SOL|USDC|USDT|BTC|ETH|[A-Z0-9a-z]{2,10})\b/g;
     const foundTokens = text.match(tokenRegex);
     if (foundTokens) {
         details.tokens = [...foundTokens];
     }
 
+    if (
+        text.toLowerCase().includes('swap') ||
+        text.toLowerCase().includes('exchange') ||
+        text.toLowerCase().includes('trade') ||
+        text.toLowerCase().includes('convert')
+    ) {
+        details.actions.push('swap');
+
+        const swapRegex =
+            /(?:swap|exchange|trade|convert|sell).*?(?:for|to)\s+(\w+|[1-9A-HJ-NP-Za-km-z]{32,44})/i;
+        const swapMatch = text.match(swapRegex);
+        if (swapMatch && swapMatch[1]) {
+            if (swapMatch[1].length >= 32 && swapMatch[1].length <= 44) {
+                if (!details.targetAddresses.includes(swapMatch[1])) {
+                    details.targetAddresses.push(swapMatch[1]);
+                }
+            } else {
+                details.targetTokens.push(swapMatch[1]);
+            }
+        }
+    }
+
     const amountRegex =
-        /\b\d+(\.\d+)?\s*(SOL|USDC|USDT|BTC|ETH|[A-Z]{2,5})?\b/g;
+        /\b\d+(\.\d+)?\s*(SOL|USDC|USDT|BTC|ETH|[A-Z0-9a-z]{2,10})?\b/g;
     let match;
     while ((match = amountRegex.exec(text)) !== null) {
         details.amounts.push(match[0]);
@@ -102,7 +144,6 @@ function extractTransactionDetails(message) {
     const actionKeywords = [
         'send',
         'transfer',
-        'swap',
         'buy',
         'sell',
         'claim',
@@ -116,12 +157,19 @@ function extractTransactionDetails(message) {
     ];
 
     for (const action of actionKeywords) {
-        if (text.toLowerCase().includes(action)) {
+        if (
+            text.toLowerCase().includes(action) &&
+            !details.actions.includes(action)
+        ) {
             details.actions.push(action);
         }
     }
 
-    return Object.values(details).some((arr) => arr.length > 0)
+    return Object.values(details).some(
+        (arr) =>
+            (Array.isArray(arr) && arr.length > 0) ||
+            (typeof arr === 'string' && arr),
+    )
         ? details
         : null;
 }
@@ -175,7 +223,6 @@ const upload = multer({ storage /*: multer.memoryStorage() */ });
 export const messageHandlerTemplate = ` 
 # Knowledge 
 {{knowledge}} 
-//  修改完后build
 About {{agentName}}: 
 {{bio}} 
 {{lore}} 
@@ -224,12 +271,14 @@ json
   * AUTO_TASK: token, price condition, time parameters
   * CREATE_TOKEN: name, symbol, description, social links
   * EXECUTE_SWAP: source token, target token, amount, slippage
+    > Always preserve both source AND target tokens for swaps
+    > Check for "swap X for Y" or "swap X to Y" patterns
   * SEND_TOKEN: recipient address, token, amount
   * ANALYZE: token symbol or token address
 - For confirmation messages:
   * Check previous action context
-  * Maintain the same action type for confirmations
-  * EXECUTE_SWAP confirmations should never trigger SEND_TOKEN
+  * Maintain ALL parameters from the previous action
+  * For EXECUTE_SWAP, ensure both source and target tokens are preserved
 
 ## 3. Context-Aware Validation
 - Review conversation history to resolve ambiguities and implicit references
