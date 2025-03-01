@@ -297,11 +297,11 @@ export function createApiRouter(
                                 contentType: attachment.contentType,
                             })
                         ),
+                        accessToken: null,
                     },
-                    // embedding: memory.embedding,
+                    embedding: null,
                     roomId: memory.roomId,
                     unique: memory.unique,
-                    accessToken: null,
                     // similarity: memory.similarity,
                 })),
             };
