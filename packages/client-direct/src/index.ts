@@ -595,10 +595,7 @@ export class DirectClient {
                     agentId: runtime.agentId,
                     userId,
                     roomId,
-                    content: {
-                        ...content,
-                        accessToken: null,
-                    },
+                    content,
                     createdAt: Date.now(),
                 };
 
