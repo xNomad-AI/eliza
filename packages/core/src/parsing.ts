@@ -164,9 +164,14 @@ export function parseJSONObjectFromText(
             try {
                 jsonData = JSON.parse(parsingText);
             } catch (e) {
-                console.error("Error parsing JSON:", e);
-                console.error("Text is not JSON", text);
-                return extractAttributes(parsingText);
+                try {
+                    jsonData = JSON.parse(text);
+                    console.log("jsonData", jsonData);
+                }catch (e){
+                    console.error("Error parsing JSON:", e);
+                    console.error("Text is not JSON", text);
+                    return extractAttributes(parsingText);
+                }
             }
         }
     }

@@ -175,112 +175,13 @@ Also Note {{agentName}} is an expert on Solana blockchain and has extensive know
 # Task: Carefully analyze the conversation context to determine the appropriate blockchain action for {{agentName}}.
 
 # Instructions: Generate the next message for {{agentName}} in valid JSON format:
-\`\`\` 
-json 
+\`\`\`json 
 { 
     "user": "{{agentName}}", 
     "text": "<string>",  
     "action": "<string>" 
 } 
 \`\`\` 
- 
-# Action Matching Framework:
-
-## 1. Intent Recognition (Primary Analysis)
-- Identify explicit action keywords and blockchain commands in the latest message
-- Map user intent to specific blockchain operations using this priority hierarchy:
-  * Direct commands: "create," "swap," "send," "transfer," "claim," "buy," "sell", "sell all" 
-  * Confirmation responses: "yes", "confirm", "ok", "proceed", "continue"
-  * Object references: token names, wallet addresses, amounts
-  * Contextual clues: "airdrop," "liquidity," "transaction", "analyze"
-
-## 2. Parameter Extraction
-- For each potential action, identify if all required parameters are present:
-  * CLAIM_AIRDROP: airdrop identifier or source
-  * AUTO_TASK: token, price condition, time parameters
-  * CREATE_TOKEN: name, symbol, description, social links
-  * EXECUTE_SWAP: source token, target token, amount, slippage
-  * SEND_TOKEN: recipient address, token, amount
-  * ANALYZE: token symbol or token address
-- For confirmation messages:
-  * Check previous action context
-  * Maintain the same action type for confirmations
-  * EXECUTE_SWAP confirmations should never trigger SEND_TOKEN
-
-## 3. Context-Aware Validation
-- Review conversation history to resolve ambiguities and implicit references
-- Check for previously mentioned tokens, amounts, or addresses that apply to current intent
-- Verify if the user has already been informed about prerequisites (e.g., fees, confirmations)
-- Detect if the current message is responding to a previous action suggestion or error
-- For confirmation messages, always maintain the original action type
-- Prioritize maintaining action context over new action detection
-- For EXECUTE_SWAP flows, ignore transfer-related keywords in confirmation messages
-
-## 4. Confidence-Based Decision
-- Assign confidence scores to potential actions based on:
-  * Parameter completeness (all required parameters identified)
-  * Intent clarity (direct command vs implied action)
-  * Contextual consistency (aligns with conversation flow)
-- Select the action with highest confidence score above threshold
-
-## 5. Response Generation Rules
-- For high-confidence action matches:
-  * Set appropriate action value
-  * Keep text response concise (<15 words) and confirmation-focused
-  * Include essential transaction details for verification
-- For medium-confidence matches:
-  * Set provisional action but request explicit confirmation
-  * List identified parameters for user verification
-- For low-confidence situations:
-  * Set action to "none"
-  * Generate contextually relevant response that either:
-    > Seeks clarification on specific missing parameters
-    > Suggests potential actions based on partial intent recognition
-    > Continues conversation naturally if no action intent detected
-
-## 6. Error Recovery Protocol
-- If previous action failed, analyze error type:
-  * Parameter error: Request specific correction
-  * Authorization error: Prompt for authentication
-  * Blockchain error: Suggest alternative approaches
-  * Rate limit/timing error: Suggest retry parameters
-- Avoid repeating failed actions with identical parameters
-
-# Specific Action Triggers:
-
-1. CLAIM_AIRDROP: 
-   - Explicit mentions of "airdrop," "claim," "get tokens"
-   - References to specific airdrop campaigns or eligibility
-   - Questions about available airdrops
-
-2. AUTO_TASK (AUTO_BUY/SELL/SWAP): 
-   - Conditional statements: "when price reaches," "if token goes above/below"
-   - Time-based requests: "in 2 hours," "every day," "schedule," "automated"
-   - Monitoring requests: "alert me," "watch for," "keep track of"
-
-3. CREATE_TOKEN: 
-   - Direct creation intent: "make a token," "create coin," "launch token"
-   - Token parameter specification: naming, supply discussion, tokenomics
-   - References to pump.fun platform or meme tokens
-
-4. EXECUTE_SWAP: 
-   - Exchange terminology: "swap," "exchange," "trade," "convert", "sell", "buy"
-   - Pairing specifications: "X to Y," "for," "into"
-   - Amount specifications with token references
-
-5. SEND_TOKEN: 
-   - Transfer vocabulary: "send," "transfer," "pay," "withdraw"
-   - Recipient specification: addresses, names, "to wallet"
-   - Amount and token type specifications
-   
-6. ANALYZE:
-   - Explicit mentions of "analyze," "check," "review," "inspect"
-    - Token symbol or address references for analysis
-    
-7. WALLET_PORTFOLIO:
-    - Direct requests for wallet status: "show my wallet," "portfolio"
-    - Balance inquiries: "how much do I have," "what's in your wallet"
-    - Token-specific balance checks
 `;
 
 export const hyperfiHandlerTemplate = `{{actionExamples}}
@@ -477,26 +378,26 @@ export class DirectClient {
                     createdAt: Date.now(),
                 };
 
-                const transactionDetails =
-                    extractTransactionDetails(userMessage);
+                // const transactionDetails =
+                //     extractTransactionDetails(userMessage);
 
-                let runtimeTransactionContext =
-                    (await runtime.cacheManager.get(
-                        `transactionContext-${agentId}`
-                    )) || {};
-
-                if (transactionDetails) {
-                    runtimeTransactionContext[roomId] = {
-                        ...runtimeTransactionContext[roomId],
-                        ...transactionDetails,
-                        lastUpdated: Date.now(),
-                    };
-                    await runtime.cacheManager.set(
-                        `transactionContext-${agentId}`,
-                        runtimeTransactionContext,
-                        { expires: 60 * 60 * 24 }
-                    );
-                }
+                // let runtimeTransactionContext =
+                //     (await runtime.cacheManager.get(
+                //         `transactionContext-${agentId}`
+                //     )) || {};
+                //
+                // if (transactionDetails) {
+                //     runtimeTransactionContext[roomId] = {
+                //         ...runtimeTransactionContext[roomId],
+                //         ...transactionDetails,
+                //         lastUpdated: Date.now(),
+                //     };
+                //     await runtime.cacheManager.set(
+                //         `transactionContext-${agentId}`,
+                //         runtimeTransactionContext,
+                //         { expires: 60 * 60 * 24 }
+                //     );
+                // }
 
                 const memory: Memory = {
                     id: stringToUuid(messageId + "-" + userId),
@@ -520,9 +421,7 @@ export class DirectClient {
                         state.recentMessages &&
                         Array.isArray(state.recentMessages)
                     ) {
-                        const transactionContext =
-                            runtimeTransactionContext &&
-                            runtimeTransactionContext[userMessage.roomId];
+                        const transactionContext = undefined;
                         state.recentMessages = state.recentMessages.filter(
                             (msg) =>
                                 isRelevantMessage(
@@ -549,17 +448,7 @@ export class DirectClient {
 
                 runtime.composeState = originalComposeState;
 
-                let contextTemplate = messageHandlerTemplate;
-                if (state.transactionContext) {
-                    contextTemplate = messageHandlerTemplate.replace(
-                        "# Capabilities",
-                        `# Transaction Context\n${JSON.stringify(
-                            state.transactionContext,
-                            null,
-                            2
-                        )}\n\n# Capabilities`
-                    );
-                }
+                let contextTemplate = runtime.character.templates.messageHandlerTemplate || messageHandlerTemplate;
 
                 const context = composeContext({
                     state,
@@ -592,6 +481,10 @@ export class DirectClient {
 
                 let actionResponseMessage = null as Content | null;
 
+                state = await runtime.composeState(userMessage, {
+                    agentName: runtime.character.name,
+                    actionParameters: aiResponseMessage.parameters,
+                });
                 await runtime.processActions(
                     memory,
                     [aiResponseMemory],

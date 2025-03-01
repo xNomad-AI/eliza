@@ -961,6 +961,10 @@ export class AgentRuntime implements IAgentRuntime {
     registerAction(action: Action) {
         elizaLogger.success(`${this.character.name}(${this.agentId}) - Registering action: ${action.name}`);
         this.actions.push(action);
+        if (action.functionCallSpec){
+            this.character.system = this.character.system || `You have the following actions available for interaction, extract action parameters from the conversation when required paramters are ready `;
+            this.character.system += `\n\n${formatActionSystemPrompt(action)}`;
+        }
     }
 
     /**
@@ -1783,3 +1787,44 @@ const formatKnowledge = (knowledge: KnowledgeItem[]) => {
         .map((knowledge) => `- ${knowledge.content.text}`)
         .join("\n");
 };
+
+
+const systemPromptTemplate = `
+## Action Specification:
+Name: {{functionCallSpecName}}
+Strict: {{strict}}
+Additional Properties Allowed: {{additionalProperties}}
+Description: {{functionCallSpecDescription}}
+Parameters:
+{{parameters}}
+`;
+
+function formatActionSystemPrompt(action: Action) {
+    const {
+        name: actionName,
+        description,
+        examples,
+        functionCallSpec,
+    } = action;
+
+    const functionCallSpecName = action.name;
+    const strict = functionCallSpec.strict;
+    const additionalProperties = functionCallSpec.additionalProperties;
+    const functionCallSpecDescription = functionCallSpec.description;
+    const parameters =  Object.entries(functionCallSpec.parameters.properties)
+            .map(([key, value]) => `${key}: ${value.type} - ${value.description}`)
+            .join('\n')
+    const formattedExamples = examples
+        .map(example => example.map(e => `- ${e}`).join('\n'))
+        .join('\n');
+
+    return systemPromptTemplate
+        .replace('{{actionName}}', actionName)
+        .replace('{{description}}', description)
+        .replace('{{functionCallSpecName}}', functionCallSpecName)
+        .replace('{{functionCallSpecDescription}}', functionCallSpecDescription)
+        .replace('{{parameters}}', parameters)
+        .replace('{{strict}}', `${strict}`)
+        .replace('{{additionalProperties}}', `${additionalProperties}`)
+        .replace('{{examples}}', formattedExamples);
+}
