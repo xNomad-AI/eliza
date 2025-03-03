@@ -562,6 +562,20 @@ export class DirectClient {
                         `transactionContext-${agentId}`,
                     )) || {};
 
+                if (
+                    transactionDetails &&
+                    !(
+                        'isConfirmation' in transactionDetails &&
+                        transactionDetails.isConfirmation
+                    )
+                ) {
+                    if (runtimeTransactionContext[roomId]) {
+                        delete runtimeTransactionContext[roomId].isConfirmed;
+                        delete runtimeTransactionContext[roomId]
+                            .confirmationText;
+                    }
+                }
+
                 if (transactionDetails) {
                     if (
                         'isConfirmation' in transactionDetails &&
@@ -577,7 +591,6 @@ export class DirectClient {
                         };
                     } else {
                         runtimeTransactionContext[roomId] = {
-                            ...runtimeTransactionContext[roomId],
                             ...transactionDetails,
                             lastUpdated: Date.now(),
                         };
@@ -807,6 +820,8 @@ Format your response as a JSON object with these fields:
                                     .isConfirmation;
                                 delete runtimeTransactionContext[roomId]
                                     .isConfirmed;
+                                delete runtimeTransactionContext[roomId]
+                                    .actions;
 
                                 await runtime.cacheManager.set(
                                     `transactionContext-${agentId}`,
@@ -816,10 +831,7 @@ Format your response as a JSON object with these fields:
                             }
                         }
                     } catch (error) {
-                        elizaLogger.error(
-                            'Transaction analysis failed:',
-                            error,
-                        );
+                        elizaLogger.error('交易分析失败:', error);
                     }
                 }
 
