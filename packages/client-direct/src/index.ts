@@ -713,12 +713,46 @@ export class DirectClient {
                 const responseMessages = [];
 
                 if (!shouldSuppressInitialMessage) {
-                    responseMessages.push(aiResponseMessage);
+                    responseMessages.push(aiResponseMemory);
                 }
 
                 if (actionResponseMessage) {
                     responseMessages.push(actionResponseMessage);
                 }
+
+                // Update transaction status instead of completely clearing context
+                if (
+                    aiResponseMessage.action === 'EXECUTE_SWAP' &&
+                    actionResponseMessage &&
+                    actionResponseMessage.text &&
+                    actionResponseMessage.text.includes('Transaction ID')
+                ) {
+                    // After the transaction is completed, retain contextual information but mark it as completed,
+                    // and clear any information that may have been mistakenly reused
+                    if (runtimeTransactionContext[roomId]) {
+                        runtimeTransactionContext[roomId] = {
+                            ...runtimeTransactionContext[roomId],
+                            transactionCompleted: true,
+                            lastTransactionId:
+                                actionResponseMessage.text.match(
+                                    /Transaction ID: ([a-zA-Z0-9]+)/,
+                                )?.[1] || '',
+                            transactionAction: aiResponseMessage.action,
+                            lastUpdated: Date.now(),
+                        };
+
+                        // Clear temporary transaction status that may cause problems
+                        delete runtimeTransactionContext[roomId].isConfirmation;
+                        delete runtimeTransactionContext[roomId].isConfirmed;
+
+                        await runtime.cacheManager.set(
+                            `transactionContext-${agentId}`,
+                            runtimeTransactionContext,
+                            { expires: 60 * 60 * 24 },
+                        );
+                    }
+                }
+
                 for (const m of responseMessages) {
                     const resMemory: Memory = {
                         id: stringToUuid(Date.now().toString()),
