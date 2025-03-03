@@ -720,35 +720,105 @@ export class DirectClient {
                     responseMessages.push(actionResponseMessage);
                 }
 
-                // Update transaction status instead of completely clearing context
                 if (
-                    aiResponseMessage.action === 'EXECUTE_SWAP' &&
+                    aiResponseMessage.action &&
                     actionResponseMessage &&
-                    actionResponseMessage.text &&
-                    actionResponseMessage.text.includes('Transaction ID')
+                    actionResponseMessage.text
                 ) {
-                    // After the transaction is completed, retain contextual information but mark it as completed,
-                    // and clear any information that may have been mistakenly reused
-                    if (runtimeTransactionContext[roomId]) {
-                        runtimeTransactionContext[roomId] = {
-                            ...runtimeTransactionContext[roomId],
-                            transactionCompleted: true,
-                            lastTransactionId:
-                                actionResponseMessage.text.match(
-                                    /Transaction ID: ([a-zA-Z0-9]+)/,
-                                )?.[1] || '',
-                            transactionAction: aiResponseMessage.action,
-                            lastUpdated: Date.now(),
-                        };
+                    const transactionSchema = z.object({
+                        isTransactionCompleted: z.boolean(),
+                        transactionId: z.string().optional(),
+                        transactionType: z.string().optional(),
+                        transactionDetails: z.record(z.any()).optional(),
+                    });
 
-                        // Clear temporary transaction status that may cause problems
-                        delete runtimeTransactionContext[roomId].isConfirmation;
-                        delete runtimeTransactionContext[roomId].isConfirmed;
+                    // Create context for analyzing transactions
+                    const transactionAnalysisContext = `
+# Transaction Analysis Task
+Analyze the following message to determine if a blockchain transaction was completed.
 
-                        await runtime.cacheManager.set(
-                            `transactionContext-${agentId}`,
-                            runtimeTransactionContext,
-                            { expires: 60 * 60 * 24 },
+## Message:
+${actionResponseMessage.text}
+
+## Action Type:
+${aiResponseMessage.action}
+
+## Instructions:
+1. Determine if the message indicates a completed transaction
+2. If completed, extract the transaction ID if present
+3. Identify the type of transaction (swap, transfer, mint, etc.)
+4. Return a structured response with your analysis
+
+Format your response as a JSON object with these fields:
+- isTransactionCompleted: boolean indicating if transaction is complete
+- transactionId: the transaction ID/hash if present (empty string if not found)
+- transactionType: the type of transaction (e.g. "swap", "transfer")
+- transactionDetails: any additional details you can extract (optional)
+`;
+
+                    try {
+                        // Call LLM to analyze transaction status
+                        const transactionAnalysis = await generateObject({
+                            runtime,
+                            context: transactionAnalysisContext,
+                            modelClass: ModelClass.SMALL,
+                            schema: transactionSchema,
+                        });
+
+                        if (
+                            (
+                                transactionAnalysis?.object as {
+                                    isTransactionCompleted: boolean;
+                                }
+                            )?.isTransactionCompleted
+                        ) {
+                            // Transaction completed, update status
+                            if (runtimeTransactionContext[roomId]) {
+                                runtimeTransactionContext[roomId] = {
+                                    ...runtimeTransactionContext[roomId],
+                                    transactionCompleted: true,
+                                    lastTransactionId:
+                                        (
+                                            transactionAnalysis.object as {
+                                                transactionId: string;
+                                            }
+                                        )?.transactionId || '',
+                                    transactionAction: aiResponseMessage.action,
+                                    transactionType:
+                                        (
+                                            transactionAnalysis.object as {
+                                                transactionType: string;
+                                            }
+                                        )?.transactionType || '',
+                                    transactionDetails:
+                                        (
+                                            transactionAnalysis.object as {
+                                                transactionDetails: Record<
+                                                    string,
+                                                    any
+                                                >;
+                                            }
+                                        )?.transactionDetails || {},
+                                    lastUpdated: Date.now(),
+                                };
+
+                                // Clear temporary transaction status
+                                delete runtimeTransactionContext[roomId]
+                                    .isConfirmation;
+                                delete runtimeTransactionContext[roomId]
+                                    .isConfirmed;
+
+                                await runtime.cacheManager.set(
+                                    `transactionContext-${agentId}`,
+                                    runtimeTransactionContext,
+                                    { expires: 60 * 60 * 24 },
+                                );
+                            }
+                        }
+                    } catch (error) {
+                        elizaLogger.error(
+                            'Transaction analysis failed:',
+                            error,
                         );
                     }
                 }
