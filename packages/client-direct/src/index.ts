@@ -719,8 +719,6 @@ export class DirectClient {
                 if (actionResponseMessage) {
                     responseMessages.push(actionResponseMessage);
                 }
-<<<<<<< HEAD
-=======
 
                 if (
                     aiResponseMessage.action &&
@@ -825,7 +823,6 @@ Format your response as a JSON object with these fields:
                     }
                 }
 
->>>>>>> fix-transaction-id-v2
                 for (const m of responseMessages) {
                     const resMemory: Memory = {
                         id: stringToUuid(Date.now().toString()),
