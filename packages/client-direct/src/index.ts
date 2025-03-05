@@ -121,15 +121,32 @@ function extractTransactionDetails(message) {
         details.actions.push('swap');
 
         const swapRegex =
-            /(?:swap|exchange|trade|convert|sell).*?(?:for|to)\s+(\w+|[1-9A-HJ-NP-Za-km-z]{32,44})/i;
+            /(?:swap|exchange|trade|convert|sell)\s+(?:(\d+(?:\.\d+)?)\s+)?(\w+).*?(?:for|to)\s+(?:(\d+(?:\.\d+)?)\s+)?(\w+|[1-9A-HJ-NP-Za-km-z]{32,44})/i;
         const swapMatch = text.match(swapRegex);
-        if (swapMatch && swapMatch[1]) {
-            if (swapMatch[1].length >= 32 && swapMatch[1].length <= 44) {
-                if (!details.targetAddresses.includes(swapMatch[1])) {
-                    details.targetAddresses.push(swapMatch[1]);
+
+        if (swapMatch) {
+            if (swapMatch[1] && swapMatch[2]) {
+                const amountStr = `${swapMatch[1]} ${swapMatch[2]}`;
+                if (!details.amounts.includes(amountStr)) {
+                    details.amounts.push(amountStr);
                 }
-            } else {
-                details.targetTokens.push(swapMatch[1]);
+                if (!details.tokens.includes(swapMatch[2])) {
+                    details.tokens.push(swapMatch[2]);
+                }
+            } else if (swapMatch[2] && !details.tokens.includes(swapMatch[2])) {
+                details.tokens.push(swapMatch[2]);
+            }
+
+            if (swapMatch[4]) {
+                if (swapMatch[4].length >= 32 && swapMatch[4].length <= 44) {
+                    if (!details.targetAddresses.includes(swapMatch[4])) {
+                        details.targetAddresses.push(swapMatch[4]);
+                    }
+                } else {
+                    if (!details.targetTokens.includes(swapMatch[4])) {
+                        details.targetTokens.push(swapMatch[4]);
+                    }
+                }
             }
         }
     }
@@ -564,24 +581,10 @@ export class DirectClient {
 
                 if (
                     transactionDetails &&
-                    !(
-                        'isConfirmation' in transactionDetails &&
-                        transactionDetails.isConfirmation
-                    )
+                    'isConfirmation' in transactionDetails &&
+                    transactionDetails.isConfirmation
                 ) {
                     if (runtimeTransactionContext[roomId]) {
-                        delete runtimeTransactionContext[roomId].isConfirmed;
-                        delete runtimeTransactionContext[roomId]
-                            .confirmationText;
-                    }
-                }
-
-                if (transactionDetails) {
-                    if (
-                        'isConfirmation' in transactionDetails &&
-                        transactionDetails.isConfirmation &&
-                        runtimeTransactionContext[roomId]
-                    ) {
                         runtimeTransactionContext[roomId] = {
                             ...runtimeTransactionContext[roomId],
                             isConfirmed: true,
@@ -589,18 +592,56 @@ export class DirectClient {
                                 transactionDetails.confirmationText,
                             lastUpdated: Date.now(),
                         };
+                    }
+                } else if (transactionDetails) {
+                    if (runtimeTransactionContext[roomId]) {
+                        delete runtimeTransactionContext[roomId].isConfirmed;
+                        delete runtimeTransactionContext[roomId]
+                            .confirmationText;
+
+                        const mergedContext = {
+                            ...runtimeTransactionContext[roomId],
+                            ...transactionDetails,
+                            lastUpdated: Date.now(),
+                        };
+
+                        [
+                            'addresses',
+                            'tokens',
+                            'targetTokens',
+                            'targetAddresses',
+                            'amounts',
+                            'actions',
+                        ].forEach((field) => {
+                            if (
+                                transactionDetails[field] &&
+                                transactionDetails[field].length > 0
+                            ) {
+                                mergedContext[field] = Array.from(
+                                    new Set([
+                                        ...(runtimeTransactionContext[roomId][
+                                            field
+                                        ] || []),
+                                        ...transactionDetails[field],
+                                    ]),
+                                );
+                            }
+                        });
+
+                        runtimeTransactionContext[roomId] = mergedContext;
                     } else {
                         runtimeTransactionContext[roomId] = {
                             ...transactionDetails,
                             lastUpdated: Date.now(),
                         };
                     }
-                    await runtime.cacheManager.set(
-                        `transactionContext-${agentId}`,
-                        runtimeTransactionContext,
-                        { expires: 60 * 60 * 24 },
-                    );
                 }
+
+                await runtime.cacheManager.set(
+                    `transactionContext-${agentId}`,
+                    runtimeTransactionContext,
+                    { expires: 60 * 60 * 24 },
+                );
 
                 const memory: Memory = {
                     id: stringToUuid(messageId + '-' + userId),
@@ -658,12 +699,12 @@ export class DirectClient {
                 let contextTemplate = messageHandlerTemplate;
                 if (state.transactionContext) {
                     contextTemplate = messageHandlerTemplate.replace(
-                        '# Capabilities',
+                        '# Transaction Context',
                         `# Transaction Context\n${JSON.stringify(
                             state.transactionContext,
                             null,
                             2,
-                        )}\n\n# Capabilities`,
+                        )}\n\n# Important: If transaction information is incomplete, ask the user for the missing details before proceeding. Especially for SWAP transactions, always ensure both source and target tokens are clearly identified.`,
                     );
                 }
 
