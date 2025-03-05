@@ -308,6 +308,7 @@ export class DirectClient {
                     context,
                     modelClass: ModelClass.LARGE,
                 });
+                aiResponseMessage.user = runtime.character.name;
                 if ('insert' in runtime.databaseAdapter && typeof runtime.databaseAdapter.insert === 'function') {
                     runtime.databaseAdapter.insert('aiResponses', {
                         agentId: runtime.agentId,
@@ -375,17 +376,19 @@ export class DirectClient {
                     responseMessages.push(actionResponseMessage);
                 }
                 for (const m of responseMessages) {
-                    const resMemory : Memory = {
-                        id: stringToUuid(Date.now().toString()),
-                        roomId: userMessage.roomId,
-                        userId: runtime.agentId,
-                        agentId: runtime.agentId,
-                        content: m,
-                        embedding: getEmbeddingZeroVector(),
-                        createdAt: Date.now(),
-                    };
-                    state = await runtime.updateRecentMessageState(state);
-                    await runtime.messageManager.createMemory(resMemory, true);
+                    if (!m.isError){
+                        const resMemory : Memory = {
+                            id: stringToUuid(Date.now().toString()),
+                            roomId: userMessage.roomId,
+                            userId: runtime.agentId,
+                            agentId: runtime.agentId,
+                            content: m,
+                            embedding: getEmbeddingZeroVector(),
+                            createdAt: Date.now(),
+                        };
+                        state = await runtime.updateRecentMessageState(state);
+                        await runtime.messageManager.createMemory(resMemory, true);
+                    }
                 }
                 console.log(`${messageId} message response elapsed: ${Date.now() - messageStart}ms`);
 

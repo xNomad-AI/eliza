@@ -1562,8 +1562,6 @@ const formatKnowledge = (knowledge: KnowledgeItem[]) => {
 const systemPromptTemplate = `
 ## Action Specification:
 Name: {{functionCallSpecName}}
-Strict: {{strict}}
-Additional Properties Allowed: {{additionalProperties}}
 Description: {{functionCallSpecDescription}}
 Parameters:
 {{parameters}}
@@ -1573,7 +1571,6 @@ function formatActionSystemPrompt(action: Action) {
     const {
         name: actionName,
         description,
-        examples,
         functionCallSpec,
     } = action;
 
@@ -1584,17 +1581,10 @@ function formatActionSystemPrompt(action: Action) {
     const parameters =  Object.entries(functionCallSpec.parameters.properties)
             .map(([key, value]) => `${key}: ${value.type} - ${value.description}`)
             .join('\n')
-    const formattedExamples = examples
-        .map(example => example.map(e => `- ${e}`).join('\n'))
-        .join('\n');
 
     return systemPromptTemplate
-        .replace('{{actionName}}', actionName)
         .replace('{{description}}', description)
         .replace('{{functionCallSpecName}}', functionCallSpecName)
         .replace('{{functionCallSpecDescription}}', functionCallSpecDescription)
         .replace('{{parameters}}', parameters)
-        .replace('{{strict}}', `${strict}`)
-        .replace('{{additionalProperties}}', `${additionalProperties}`)
-        .replace('{{examples}}', formattedExamples);
 }
