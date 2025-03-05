@@ -1045,6 +1045,10 @@ export class AgentRuntime implements IAgentRuntime {
                 await action.handler(this, message, state, {}, callback);
             } catch (error) {
                 elizaLogger.error(error);
+                callback({
+                    text: `An error occurred while executing the action: "${action.name}". Please try again later. If the issue persists, feel free to contact support for assistance.`,
+                    isError: true,
+                });
             }
         }
     }
