@@ -295,6 +295,7 @@ export class DirectClient {
                 await runtime.messageManager.createMemory(memory);
                 let state = await runtime.composeState(userMessage, {
                     agentName: runtime.character.name,
+                    conversationLength: 10,
                 });
 
                 let contextTemplate = runtime.character.templates.messageHandlerTemplate || messageHandlerTemplate;
