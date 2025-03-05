@@ -1149,6 +1149,7 @@ export interface IDatabaseAdapter {
     createKnowledge(knowledge: RAGKnowledgeItem): Promise<void>;
     removeKnowledge(id: UUID): Promise<void>;
     clearKnowledge(agentId: UUID, shared?: boolean): Promise<void>;
+    insert?(tableName: string, record: any): Promise<void>;
 }
 
 export interface IDatabaseCacheAdapter {

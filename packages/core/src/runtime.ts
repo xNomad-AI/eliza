@@ -270,7 +270,7 @@ export class AgentRuntime implements IAgentRuntime {
             characterModelProvider: opts.character?.modelProvider,
         });
 
-        elizaLogger.debug(
+        elizaLogger.success(
             `[AgentRuntime] Process working directory: ${process.cwd()}`,
         );
 
@@ -373,21 +373,6 @@ export class AgentRuntime implements IAgentRuntime {
         
         this.imageVisionModelProvider =
             this.character.imageVisionModelProvider ?? this.modelProvider;
-            
-        elizaLogger.info(
-          `${this.character.name}(${this.agentId}) - Selected model provider:`,
-          this.modelProvider
-        );
-
-        elizaLogger.debug(
-          `${this.character.name}(${this.agentId}) - Selected image model provider:`,
-          this.imageModelProvider
-        );
-
-        elizaLogger.debug(
-            `${this.character.name}(${this.agentId}) - Selected image vision model provider:`,
-            this.imageVisionModelProvider
-        );
 
         // Validate model provider
         if (!Object.values(ModelProviderName).includes(this.modelProvider)) {
@@ -601,7 +586,7 @@ export class AgentRuntime implements IAgentRuntime {
                 continue;
             }
 
-            elizaLogger.info(
+            elizaLogger.success(
                 "Processing knowledge for ",
                 this.character.name,
                 " - ",
@@ -1256,7 +1241,6 @@ export class AgentRuntime implements IAgentRuntime {
         const [actorsData, recentMessagesData]: [
             Actor[],
             Memory[],
-            // Goal[],
         ] = await Promise.all([
             getActorDetails({ runtime: this, roomId }),
             this.messageManager.getMemories({
@@ -1264,15 +1248,7 @@ export class AgentRuntime implements IAgentRuntime {
                 count: conversationLength,
                 unique: false,
             }),
-            // getGoals({
-            //     runtime: this,
-            //     count: 10,
-            //     onlyInProgress: false,
-            //     roomId,
-            // }),
         ]);
-
-        // const goals = formatGoalsAsString({ goals: goalsData });
 
         const actors = formatActors({ actors: actorsData ?? [] });
 
@@ -1286,8 +1262,6 @@ export class AgentRuntime implements IAgentRuntime {
             actors: actorsData,
             conversationHeader: false,
         });
-
-        // const lore = formatLore(loreData);
 
         const senderName = actorsData?.find(
             (actor: Actor) => actor.id === userId,
@@ -1352,17 +1326,6 @@ Text: ${attachment.text}
         }
 
         let formattedCharacterPostExamples = '';
-        // if (Array.isArray(this.character.postExamples)){
-        //     formattedCharacterPostExamples = (this.character.postExamples
-        //         ?.sort(() => 0.5 - Math.random())
-        //         .map((post) => {
-        //             const messageString = `${post}`;
-        //             return messageString;
-        //         })
-        //         .slice(0, 50)
-        //         .join("\n")) || '';
-        // }
-
         let formattedCharacterMessageExamples = '';
         if (Array.isArray(this.character.messageExamples)){
             formattedCharacterMessageExamples = (this.character.messageExamples
@@ -1389,74 +1352,6 @@ Text: ${attachment.text}
                 .join("\n\n")) || '';
         }
 
-        // const getRecentInteractions = async (
-        //     userA: UUID,
-        //     userB: UUID,
-        // ): Promise<Memory[]> => {
-        //     // Find all rooms where userA and userB are participants
-        //     const rooms = await this.databaseAdapter.getRoomsForParticipants([
-        //         userA,
-        //         userB,
-        //     ]);
-        //
-        //     // Check the existing memories in the database
-        //     return this.messageManager.getMemoriesByRoomIds({
-        //         // filter out the current room id from rooms
-        //         roomIds: rooms.filter((room) => room !== roomId),
-        //         limit: 20,
-        //     });
-        // };
-
-        // const recentInteractions =
-        //     userId !== this.agentId
-        //         ? await getRecentInteractions(userId, this.agentId)
-        //         : [];
-
-        // const getRecentMessageInteractions = async (
-        //     recentInteractionsData: Memory[],
-        // ): Promise<string> => {
-        //     // Format the recent messages
-        //     const formattedInteractions = await Promise.all(
-        //         recentInteractionsData.map(async (message) => {
-        //             const isSelf = message.userId === this.agentId;
-        //             let sender: string;
-        //             if (isSelf) {
-        //                 sender = this.character.name;
-        //             } else {
-        //                 const accountId =
-        //                     await this.databaseAdapter.getAccountById(
-        //                         message.userId,
-        //                     );
-        //                 sender = accountId?.username || "unknown";
-        //             }
-        //             return `${sender}: ${message.content.text}`;
-        //         }),
-        //     );
-        //
-        //     return formattedInteractions.join("\n");
-        // };
-
-        // const formattedMessageInteractions =
-        //     await getRecentMessageInteractions(recentInteractions);
-
-        // const getRecentPostInteractions = async (
-        //     recentInteractionsData: Memory[],
-        //     actors: Actor[],
-        // ): Promise<string> => {
-        //     const formattedInteractions = formatPosts({
-        //         messages: recentInteractionsData,
-        //         actors,
-        //         conversationHeader: true,
-        //     });
-        //
-        //     return formattedInteractions;
-        // };
-
-        // const formattedPostInteractions = await getRecentPostInteractions(
-        //     recentInteractions,
-        //     actorsData,
-        // );
-
         // if bio is a string, use it. if its an array, pick one at random
         let bio = this.character.bio || "";
         if (Array.isArray(bio)) {
@@ -1471,25 +1366,6 @@ Text: ${attachment.text}
         let formattedKnowledge = this.character.knowledge
             .filter((item): item is string => typeof item === 'string')
             .join('\n\n');
-
-        // if (this.character.settings?.ragKnowledge) {
-        //     const recentContext = recentMessagesData
-        //         .slice(-3) // Last 3 messages
-        //         .map((msg) => msg.content.text)
-        //         .join(" ");
-        //
-        //     knowledgeData = await this.ragKnowledgeManager.getKnowledge({
-        //         query: message.content.text,
-        //         conversationContext: recentContext,
-        //         limit: 5,
-        //     });
-        //
-        //     formattedKnowledge = formatKnowledge(knowledgeData);
-        // } else {
-        //     knowledgeData = await knowledge.get(this, message);
-        //
-        //     formattedKnowledge = formatKnowledge(knowledgeData);
-        // }
 
         const initialState = {
             agentId: this.agentId,
@@ -1506,15 +1382,6 @@ Text: ${attachment.text}
                       ]
                     : "",
             knowledge: formattedKnowledge,
-            // knowledgeData: knowledgeData,
-            // ragKnowledgeData: knowledgeData,
-            // Recent interactions between the sender and receiver, formatted as messages
-            // recentMessageInteractions: formattedMessageInteractions,
-            // Recent interactions between the sender and receiver, formatted as posts
-            // recentPostInteractions: formattedPostInteractions,
-            // Raw memory[] array of interactions
-            // recentInteractionsData: recentInteractions,
-            // randomly pick one topic
             topic:
                 this.character.topics && this.character.topics.length > 0
                     ? this.character.topics[
@@ -1570,7 +1437,6 @@ Text: ${attachment.text}
                           })(),
                       )
                     : "",
-
             postDirections:
                 this.character?.style?.all?.length > 0 ||
                 this.character?.style?.post.length > 0
@@ -1583,28 +1449,6 @@ Text: ${attachment.text}
                           })(),
                       )
                     : "",
-
-            //old logic left in for reference
-            //food for thought. how could we dynamically decide what parts of the character to add to the prompt other than random? rag? prompt the llm to decide?
-            /*
-            postDirections:
-                this.character?.style?.all?.length > 0 ||
-                this.character?.style?.post.length > 0
-                    ? addHeader(
-                            "# Post Directions for " + this.character.name,
-                            (() => {
-                                const all = this.character?.style?.all || [];
-                                const post = this.character?.style?.post || [];
-                                const shuffled = [...all, ...post].sort(
-                                    () => 0.5 - Math.random()
-                                );
-                                return shuffled
-                                    .slice(0, conversationLength / 2)
-                                    .join("\n");
-                            })()
-                        )
-                    : "",*/
-            // Agent runtime stuff
             senderName,
             actors:
                 actors && actors.length > 0
@@ -1612,14 +1456,6 @@ Text: ${attachment.text}
                     : "",
             actorsData,
             roomId,
-            // goals:
-            //     goals && goals.length > 0
-            //         ? addHeader(
-            //               "# Goals\n{{agentName}} should prioritize accomplishing the objectives that are in progress.",
-            //               goals,
-            //           )
-            //         : "",
-            // goalsData,
             recentMessages:
                 recentMessages && recentMessages.length > 0
                     ? addHeader("# Conversation Messages", recentMessages)
@@ -1635,77 +1471,7 @@ Text: ${attachment.text}
                     : "",
             ...additionalKeys,
         } as State;
-
-        const actionPromises = this.actions.map(async (action: Action) => {
-            const result = await action.validate(this, message, initialState);
-            if (result) {
-                return action;
-            }
-            return null;
-        });
-        const resolvedActions =  await Promise.all(actionPromises);
-        const actionsData = resolvedActions.filter(Boolean) as Action[];
-
-        // const evaluatorPromises = this.evaluators.map(async (evaluator) => {
-        //     const result = await evaluator.validate(
-        //         this,
-        //         message,
-        //         initialState,
-        //     );
-        //     if (result) {
-        //         return evaluator;
-        //     }
-        //     return null;
-        // });
-
-        // const [resolvedEvaluators, resolvedActions, providers] =
-        //     await Promise.all([
-        //         Promise.all(evaluatorPromises),
-        //         Promise.all(actionPromises),
-        //         getProviders(this, message, initialState),
-        //     ]);
-
-        // const evaluatorsData = resolvedEvaluators.filter(
-        //     Boolean,
-        // ) as Evaluator[];
-
-        const actionState = {
-            actionNames:
-                "Possible response actions: " + formatActionNames(actionsData),
-            actions:
-                actionsData.length > 0
-                    ? addHeader(
-                          "# Available Actions",
-                          formatActions(actionsData),
-                      )
-                    : "",
-            actionExamples:
-                actionsData.length > 0
-                    ? addHeader(
-                          "# Action Examples",
-                          composeActionExamples(actionsData, 30),
-                      )
-                    : "",
-            // evaluatorsData,
-            // evaluators:
-            //     evaluatorsData.length > 0
-            //         ? formatEvaluators(evaluatorsData)
-            //         : "",
-            // evaluatorNames:
-            //     evaluatorsData.length > 0
-            //         ? formatEvaluatorNames(evaluatorsData)
-            //         : "",
-            // evaluatorExamples:
-            //     evaluatorsData.length > 0
-            //         ? formatEvaluatorExamples(evaluatorsData)
-            //         : "",
-            // providers: addHeader(
-            //     `# Additional Information About ${this.character.name} and The World`,
-            //     providers,
-            // ),
-        };
-
-        return { ...initialState, ...actionState } as State;
+        return { ...initialState } as State;
     }
 
     async updateRecentMessageState(state: State): Promise<State> {

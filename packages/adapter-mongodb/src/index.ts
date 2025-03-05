@@ -1441,5 +1441,13 @@ export class MongoDBDatabaseAdapter
         }
     }
 
+    async insert(tableName: string, record: any){
+        await this.ensureConnection();
+        await this.database.collection(tableName).insertOne({
+            ...record,
+            createdAt: new Date(),
+        })
+    }
+
 }
 
