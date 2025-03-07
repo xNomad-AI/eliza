@@ -10,23 +10,26 @@ import {
     type Goal,
     type Memory,
     type Relationship,
-    type UUID, elizaLogger,
-} from "@elizaos/core";
-import { v4 } from "uuid";
+    type UUID,
+    elizaLogger,
+} from '@elizaos/core';
+import { v4 } from 'uuid';
 
 interface KnowledgeDocument {
     id: UUID;
     agentId: UUID;
-    content: string | {
-        text: string;
-        metadata?: {
-            isShared?: boolean;
-            isMain?: boolean;
-            isChunk?: boolean;
-            originalId?: string;
-            chunkIndex?: number;
-        };
-    };
+    content:
+        | string
+        | {
+              text: string;
+              metadata?: {
+                  isShared?: boolean;
+                  isMain?: boolean;
+                  isChunk?: boolean;
+                  originalId?: string;
+                  chunkIndex?: number;
+              };
+          };
     embedding: number[] | null;
     createdAt: Date | number;
     isMain: boolean;
@@ -65,16 +68,23 @@ export class MongoDBDatabaseAdapter
             'accounts',
             'goals',
             'logs',
-            'relationships'
+            'relationships',
+            'tasks',
         ];
 
         for (const collectionName of collections) {
             try {
                 await this.database.createCollection(collectionName);
-                console.log(`Collection ${collectionName} created or already exists`);
+                console.log(
+                    `Collection ${collectionName} created or already exists`,
+                );
             } catch (error) {
-                if ((error as any).code !== 48) { // 48 is "collection already exists"
-                    console.error(`Error creating collection ${collectionName}:`, error);
+                if ((error as any).code !== 48) {
+                    // 48 is "collection already exists"
+                    console.error(
+                        `Error creating collection ${collectionName}:`,
+                        error,
+                    );
                 }
             }
         }
@@ -86,20 +96,29 @@ export class MongoDBDatabaseAdapter
                 collectionName: 'memories',
                 indexes: [
                     { key: { type: 1, roomId: 1, agentId: 1, createdAt: -1 } },
-                    { key: { content: "text" }, options: { weights: { content: 10 } } }
-                ]
+                    {
+                        key: { content: 'text' },
+                        options: { weights: { content: 10 } },
+                    },
+                ],
             },
             {
                 collectionName: 'participants',
                 indexes: [
-                    { key: { userId: 1, roomId: 1 }, options: { unique: true } }
-                ]
+                    {
+                        key: { userId: 1, roomId: 1 },
+                        options: { unique: true },
+                    },
+                ],
             },
             {
                 collectionName: 'cache',
                 indexes: [
-                    { key: { expiresAt: 1 }, options: { expireAfterSeconds: 0 } }
-                ]
+                    {
+                        key: { expiresAt: 1 },
+                        options: { expireAfterSeconds: 0 },
+                    },
+                ],
             },
             {
                 collectionName: 'knowledge',
@@ -107,64 +126,88 @@ export class MongoDBDatabaseAdapter
                     { key: { agentId: 1 } },
                     { key: { isShared: 1 } },
                     { key: { id: 1 }, options: { unique: true } },
-                    { key: { "content.text": "text" } }
-                ]
-            }
+                    { key: { 'content.text': 'text' } },
+                ],
+            },
         ];
 
-        await Promise.all(collectionsWithIndexes.map(async ({ collectionName, indexes }) => {
-            const collection = this.database.collection(collectionName);
-            const existingIndexes = await collection.listIndexes().toArray();
+        await Promise.all(
+            collectionsWithIndexes.map(async ({ collectionName, indexes }) => {
+                const collection = this.database.collection(collectionName);
+                const existingIndexes = await collection
+                    .listIndexes()
+                    .toArray();
 
-            for (const index of indexes) {
-                const indexExists = existingIndexes.some(existingIndex =>
-                    JSON.stringify(existingIndex.key) === JSON.stringify(index.key)
-                );
+                for (const index of indexes) {
+                    const indexExists = existingIndexes.some(
+                        (existingIndex) =>
+                            JSON.stringify(existingIndex.key) ===
+                            JSON.stringify(index.key),
+                    );
 
-                if (!indexExists) {
-                    console.log(`Creating index for ${collectionName}:`, index.key);
-                    await collection.createIndex(index.key, index.options || {});
-                } else {
-                    console.log(`Index already exists for ${collectionName}:`, index.key);
+                    if (!indexExists) {
+                        console.log(
+                            `Creating index for ${collectionName}:`,
+                            index.key,
+                        );
+                        await collection.createIndex(
+                            index.key,
+                            index.options || {},
+                        );
+                    } else {
+                        console.log(
+                            `Index already exists for ${collectionName}:`,
+                            index.key,
+                        );
+                    }
                 }
-            }
-        }));
+            }),
+        );
     }
 
     private async initializeVectorSearch(): Promise<void> {
         try {
             // Check if vector search is supported
             const dbStatus = await this.database.admin().serverStatus();
-            const vectorSearchSupported = dbStatus.vectorSearch?.supported === true;
+            const vectorSearchSupported =
+                dbStatus.vectorSearch?.supported === true;
 
             if (vectorSearchSupported && this.isVectorSearchIndexComputable) {
                 const vectorSearchConfig = {
-                    name: "vector_index",
+                    name: 'vector_index',
                     definition: {
                         vectorSearchConfig: {
                             dimensions: 1536,
-                            similarity: "cosine",
+                            similarity: 'cosine',
                             numLists: 100,
-                            efConstruction: 128
-                        }
-                    }
+                            efConstruction: 128,
+                        },
+                    },
                 };
 
                 try {
                     // Create vector search indexes for both collections
                     for (const collection of ['memories', 'knowledge']) {
-                        await this.database.collection(collection).createIndex(
-                            { embedding: "vectorSearch" },
-                            vectorSearchConfig
-                        );
+                        await this.database
+                            .collection(collection)
+                            .createIndex(
+                                { embedding: 'vectorSearch' },
+                                vectorSearchConfig,
+                            );
                     }
 
                     this.hasVectorSearch = true;
-                    console.log("Vector search capabilities are available and enabled");
+                    console.log(
+                        'Vector search capabilities are available and enabled',
+                    );
 
                     // Check sharding status
-                    const dbInfo = await this.database.admin().command({ listDatabases: 1, nameOnly: true });
-                    const memoriesStats = await this.database.collection('memories').stats();
+                    const dbInfo = await this.database
+                        .admin()
+                        .command({ listDatabases: 1, nameOnly: true });
+                    const memoriesStats = await this.database
+                        .collection('memories')
+                        .stats();
 
                     if (dbInfo?.sharded && memoriesStats?.sharded) {
                         this.isVectorSearchIndexComputable = false;
@@ -172,19 +215,27 @@ export class MongoDBDatabaseAdapter
                         await this.createStandardEmbeddingIndexes();
                     }
                 } catch (error) {
-                    console.log("Vector search initialization failed, falling back to standard search", error);
+                    console.log(
+                        'Vector search initialization failed, falling back to standard search',
+                        error,
+                    );
                     this.isVectorSearchIndexComputable = false;
                     this.hasVectorSearch = false;
                     await this.createStandardEmbeddingIndexes();
                 }
             } else {
-                console.log("Vector search not supported, using standard search");
+                console.log(
+                    'Vector search not supported, using standard search',
+                );
                 this.isVectorSearchIndexComputable = false;
                 this.hasVectorSearch = false;
                 await this.createStandardEmbeddingIndexes();
             }
         } catch (error) {
-            console.log("Error checking vector search capability, defaulting to standard search", error);
+            console.log(
+                'Error checking vector search capability, defaulting to standard search',
+                error,
+            );
             this.isVectorSearchIndexComputable = false;
             this.hasVectorSearch = false;
             await this.createStandardEmbeddingIndexes();
@@ -194,11 +245,16 @@ export class MongoDBDatabaseAdapter
     private async createStandardEmbeddingIndexes(): Promise<void> {
         try {
             for (const collection of ['memories', 'knowledge']) {
-                await this.database.collection(collection).createIndex({ embedding: 1 });
+                await this.database
+                    .collection(collection)
+                    .createIndex({ embedding: 1 });
             }
-            console.log("Standard embedding indexes created successfully");
+            console.log('Standard embedding indexes created successfully');
         } catch (error) {
-            console.error("Failed to create standard embedding indexes:", error);
+            console.error(
+                'Failed to create standard embedding indexes:',
+                error,
+            );
         }
     }
 
@@ -229,11 +285,10 @@ export class MongoDBDatabaseAdapter
             // }
 
             this.isConnected = true;
-
         } catch (error) {
             this.isConnected = false;
             this.isVectorSearchIndexComputable = false;
-            console.error("Failed to initialize MongoDB connection:", error);
+            console.error('Failed to initialize MongoDB connection:', error);
             throw error;
         }
     }
@@ -254,31 +309,36 @@ export class MongoDBDatabaseAdapter
     // Updated database operation methods with connection checks
     async getRoom(roomId: UUID): Promise<UUID | null> {
         await this.ensureConnection();
-        const room = await this.database.collection('rooms').findOne({ id: roomId });
+        const room = await this.database
+            .collection('rooms')
+            .findOne({ id: roomId });
         return room ? room.id : null;
     }
 
     async getParticipantsForAccount(userId: UUID): Promise<Participant[]> {
         await this.ensureConnection();
-        return await this.database.collection('participants')
+        return await this.database
+            .collection('participants')
             .find({ userId })
             .toArray();
     }
 
     async getParticipantsForRoom(roomId: UUID): Promise<UUID[]> {
         await this.ensureConnection();
-        const participants = await this.database.collection('participants')
+        const participants = await this.database
+            .collection('participants')
             .find({ roomId })
             .toArray();
-        return participants.map(p => p.userId);
+        return participants.map((p) => p.userId);
     }
 
     async getParticipantUserState(
         roomId: UUID,
-        userId: UUID
-    ): Promise<"FOLLOWED" | "MUTED" | null> {
+        userId: UUID,
+    ): Promise<'FOLLOWED' | 'MUTED' | null> {
         await this.ensureConnection();
-        const participant = await this.database.collection('participants')
+        const participant = await this.database
+            .collection('participants')
             .findOne({ roomId, userId });
         return participant?.userState ?? null;
     }
@@ -286,23 +346,26 @@ export class MongoDBDatabaseAdapter
     async setParticipantUserState(
         roomId: UUID,
         userId: UUID,
-        state: "FOLLOWED" | "MUTED" | null
+        state: 'FOLLOWED' | 'MUTED' | null,
     ): Promise<void> {
         await this.ensureConnection();
-        await this.database.collection('participants').updateOne(
-            { roomId, userId },
-            { $set: { userState: state } }
-        );
+        await this.database
+            .collection('participants')
+            .updateOne({ roomId, userId }, { $set: { userState: state } });
     }
 
     async getAccountById(userId: UUID): Promise<Account | null> {
         await this.ensureConnection();
-        const account = await this.database.collection('accounts').findOne({ id: userId });
+        const account = await this.database
+            .collection('accounts')
+            .findOne({ id: userId });
         if (!account) return null;
         return {
             ...account,
-            details: typeof account.details === 'string' ?
-                JSON.parse(account.details) : account.details
+            details:
+                typeof account.details === 'string'
+                    ? JSON.parse(account.details)
+                    : account.details,
         };
     }
 
@@ -313,18 +376,19 @@ export class MongoDBDatabaseAdapter
                 ...account,
                 id: account.id ?? v4(),
                 details: JSON.stringify(account.details),
-                createdAt: new Date()
+                createdAt: new Date(),
             });
             return true;
         } catch (error) {
-            console.error("Error creating account:", error);
+            console.error('Error creating account:', error);
             return false;
         }
     }
 
     async getActorDetails(params: { roomId: UUID }): Promise<Actor[]> {
         await this.ensureConnection();
-        const actors = await this.database.collection('participants')
+        const actors = await this.database
+            .collection('participants')
             .aggregate([
                 { $match: { roomId: params.roomId } },
                 {
@@ -332,8 +396,8 @@ export class MongoDBDatabaseAdapter
                         from: 'accounts',
                         localField: 'userId',
                         foreignField: 'id',
-                        as: 'account'
-                    }
+                        as: 'account',
+                    },
                 },
                 { $unwind: '$account' },
                 {
@@ -341,16 +405,19 @@ export class MongoDBDatabaseAdapter
                         id: '$account.id',
                         name: '$account.name',
                         username: '$account.username',
-                        details: '$account.details'
-                    }
-                }
-            ]).toArray();
+                        details: '$account.details',
+                    },
+                },
+            ])
+            .toArray();
 
         return actors
-            .map(actor => ({
+            .map((actor) => ({
                 ...actor,
-                details: typeof actor.details === 'string' ?
-                    JSON.parse(actor.details) : actor.details
+                details:
+                    typeof actor.details === 'string'
+                        ? JSON.parse(actor.details)
+                        : actor.details,
             }))
             .filter((actor): actor is Actor => actor !== null);
     }
@@ -362,38 +429,44 @@ export class MongoDBDatabaseAdapter
     }): Promise<Memory[]> {
         await this.ensureConnection();
         if (!params.tableName) {
-            params.tableName = "messages";
+            params.tableName = 'messages';
         }
 
-        const memories = await this.database.collection('memories')
+        const memories = await this.database
+            .collection('memories')
             .find({
                 type: params.tableName,
                 agentId: params.agentId,
-                roomId: { $in: params.roomIds }
+                roomId: { $in: params.roomIds },
             })
             .toArray();
 
-        return memories.map(memory => ({
+        return memories.map((memory) => ({
             ...memory,
-            content: typeof memory.content === 'string' ?
-                JSON.parse(memory.content) : memory.content
+            content:
+                typeof memory.content === 'string'
+                    ? JSON.parse(memory.content)
+                    : memory.content,
         }));
     }
 
     async getMemoryById(memoryId: UUID): Promise<Memory | null> {
         await this.ensureConnection();
-        const memory = await this.database.collection('memories').findOne({ id: memoryId });
+        const memory = await this.database
+            .collection('memories')
+            .findOne({ id: memoryId });
         if (!memory) return null;
 
         return {
             ...memory,
-            content: typeof memory.content === 'string' ?
-                JSON.parse(memory.content) : memory.content
+            content:
+                typeof memory.content === 'string'
+                    ? JSON.parse(memory.content)
+                    : memory.content,
         };
     }
 
     async createMemory(memory: Memory, tableName: string): Promise<void> {
-
         await this.ensureConnection();
         try {
             // let isUnique = true;
@@ -423,7 +496,6 @@ export class MongoDBDatabaseAdapter
             //     isUnique = similarMemories.length === 0;
             // }
 
-
             const content = JSON.stringify(memory.content);
             const createdAt = memory.createdAt ?? Date.now();
 
@@ -431,14 +503,16 @@ export class MongoDBDatabaseAdapter
                 id: memory.id ?? v4(),
                 type: tableName,
                 content,
-                embedding: memory.embedding ? Array.from(memory.embedding) : null,
+                embedding: memory.embedding
+                    ? Array.from(memory.embedding)
+                    : null,
                 userId: memory.userId,
                 roomId: memory.roomId,
                 agentId: memory.agentId,
                 unique: false,
-                createdAt: new Date(createdAt)
+                createdAt: new Date(createdAt),
             });
-        }catch (e) {
+        } catch (e) {
             elizaLogger.error(e);
         }
     }
@@ -450,33 +524,48 @@ export class MongoDBDatabaseAdapter
     }): Promise<Memory[]> {
         await this.ensureConnection();
         // Implement a basic similarity search using standard MongoDB operations
-        const memories = await this.database.collection('memories')
+        const memories = await this.database
+            .collection('memories')
             .find(params.query)
             .limit(params.limit || 10)
             .toArray();
 
         // Sort by cosine similarity computed in application
         return memories
-            .map(memory => ({
+            .map((memory) => ({
                 ...memory,
-                similarity: this.cosineSimilarity(params.embedding, memory.embedding)
+                similarity: this.cosineSimilarity(
+                    params.embedding,
+                    memory.embedding,
+                ),
             }))
             .sort((a, b) => b.similarity - a.similarity)
-            .map(memory => ({
+            .map((memory) => ({
                 ...memory,
-                createdAt: typeof memory.createdAt === "string" ?
-                    Date.parse(memory.createdAt) : memory.createdAt,
-                content: typeof memory.content === 'string' ?
-                    JSON.parse(memory.content) : memory.content
+                createdAt:
+                    typeof memory.createdAt === 'string'
+                        ? Date.parse(memory.createdAt)
+                        : memory.createdAt,
+                content:
+                    typeof memory.content === 'string'
+                        ? JSON.parse(memory.content)
+                        : memory.content,
             }));
     }
 
-    private cosineSimilarity(a: Float32Array | number[], b: Float32Array | number[]): number {
+    private cosineSimilarity(
+        a: Float32Array | number[],
+        b: Float32Array | number[],
+    ): number {
         const aArr = Array.from(a);
         const bArr = Array.from(b);
         const dotProduct = aArr.reduce((sum, val, i) => sum + val * bArr[i], 0);
-        const magnitudeA = Math.sqrt(aArr.reduce((sum, val) => sum + val * val, 0));
-        const magnitudeB = Math.sqrt(bArr.reduce((sum, val) => sum + val * val, 0));
+        const magnitudeA = Math.sqrt(
+            aArr.reduce((sum, val) => sum + val * val, 0),
+        );
+        const magnitudeB = Math.sqrt(
+            bArr.reduce((sum, val) => sum + val * val, 0),
+        );
         return dotProduct / (magnitudeA * magnitudeB);
     }
 
@@ -494,7 +583,7 @@ export class MongoDBDatabaseAdapter
             type: params.tableName,
             roomId: params.roomId,
             ...(params.unique && { unique: true }),
-            ...(params.agentId && { agentId: params.agentId })
+            ...(params.agentId && { agentId: params.agentId }),
         };
 
         if (this.hasVectorSearch) {
@@ -503,34 +592,42 @@ export class MongoDBDatabaseAdapter
                     $search: {
                         vectorSearch: {
                             queryVector: new Float32Array(params.embedding),
-                            path: "embedding",
+                            path: 'embedding',
                             numCandidates: params.match_count * 2,
                             limit: params.match_count,
-                            index: "vector_index",
-                        }
-                    }
+                            index: 'vector_index',
+                        },
+                    },
                 },
-                { $match: query }
+                { $match: query },
             ];
 
             try {
-                const memories = await this.database.collection('memories')
+                const memories = await this.database
+                    .collection('memories')
                     .aggregate(pipeline)
                     .toArray();
 
-                return memories.map(memory => ({
+                return memories.map((memory) => ({
                     ...memory,
-                    createdAt: typeof memory.createdAt === "string" ?
-                        Date.parse(memory.createdAt) : memory.createdAt,
-                    content: typeof memory.content === 'string' ?
-                        JSON.parse(memory.content) : memory.content
+                    createdAt:
+                        typeof memory.createdAt === 'string'
+                            ? Date.parse(memory.createdAt)
+                            : memory.createdAt,
+                    content:
+                        typeof memory.content === 'string'
+                            ? JSON.parse(memory.content)
+                            : memory.content,
                 }));
             } catch (error) {
-                console.log("Vector search failed, falling back to standard search", error);
+                console.log(
+                    'Vector search failed, falling back to standard search',
+                    error,
+                );
                 return this.searchMemoriesFallback({
                     embedding: params.embedding,
                     query,
-                    limit: params.match_count
+                    limit: params.match_count,
                 });
             }
         }
@@ -538,11 +635,9 @@ export class MongoDBDatabaseAdapter
         return this.searchMemoriesFallback({
             embedding: params.embedding,
             query,
-            limit: params.match_count
+            limit: params.match_count,
         });
     }
-
-
 
     async searchMemoriesByEmbedding(
         embedding: number[],
@@ -553,7 +648,7 @@ export class MongoDBDatabaseAdapter
             agentId: UUID;
             unique?: boolean;
             tableName: string;
-        }
+        },
     ): Promise<Memory[]> {
         await this.ensureConnection();
         const pipeline = [
@@ -561,33 +656,38 @@ export class MongoDBDatabaseAdapter
                 $search: {
                     vectorSearch: {
                         queryVector: Array.from(embedding),
-                        path: "embedding",
+                        path: 'embedding',
                         numCandidates: (params.count ?? 10) * 2,
                         limit: params.count,
-                        index: "vector_index"
-                    }
-                }
+                        index: 'vector_index',
+                    },
+                },
             },
             {
                 $match: {
                     type: params.tableName,
                     agentId: params.agentId,
                     ...(params.unique && { unique: true }),
-                    ...(params.roomId && { roomId: params.roomId })
-                }
-            }
+                    ...(params.roomId && { roomId: params.roomId }),
+                },
+            },
         ];
 
-        const memories = await this.database.collection('memories')
+        const memories = await this.database
+            .collection('memories')
             .aggregate(pipeline)
             .toArray();
 
-        return memories.map(memory => ({
+        return memories.map((memory) => ({
             ...memory,
-            createdAt: typeof memory.createdAt === "string" ?
-                Date.parse(memory.createdAt) : memory.createdAt,
-            content: typeof memory.content === 'string' ?
-                JSON.parse(memory.content) : memory.content
+            createdAt:
+                typeof memory.createdAt === 'string'
+                    ? Date.parse(memory.createdAt)
+                    : memory.createdAt,
+            content:
+                typeof memory.content === 'string'
+                    ? JSON.parse(memory.content)
+                    : memory.content,
         }));
     }
 
@@ -605,19 +705,24 @@ export class MongoDBDatabaseAdapter
 
         try {
             // Get total count for progress tracking
-            const totalCount = await this.database.collection('memories').countDocuments({
-                type: opts.query_table_name,
-                [`content.${opts.query_field_name}.${opts.query_field_sub_name}`]: { $exists: true }
-            });
+            const totalCount = await this.database
+                .collection('memories')
+                .countDocuments({
+                    type: opts.query_table_name,
+                    [`content.${opts.query_field_name}.${opts.query_field_sub_name}`]:
+                        { $exists: true },
+                });
 
             let processed = 0;
 
             while (processed < totalCount) {
                 // Fetch batch of documents
-                const memories = await this.database.collection('memories')
+                const memories = await this.database
+                    .collection('memories')
                     .find({
                         type: opts.query_table_name,
-                        [`content.${opts.query_field_name}.${opts.query_field_sub_name}`]: { $exists: true }
+                        [`content.${opts.query_field_name}.${opts.query_field_sub_name}`]:
+                            { $exists: true },
                     })
                     .skip(processed)
                     .limit(BATCH_SIZE)
@@ -625,44 +730,61 @@ export class MongoDBDatabaseAdapter
 
                 // Process batch
                 const batchResults = memories
-                    .map(memory => {
+                    .map((memory) => {
                         try {
-                            const content = memory.content[opts.query_field_name][opts.query_field_sub_name];
+                            const content =
+                                memory.content[opts.query_field_name][
+                                    opts.query_field_sub_name
+                                ];
                             if (!content || typeof content !== 'string') {
                                 return null;
                             }
 
                             return {
                                 embedding: Array.from(memory.embedding),
-                                levenshtein_score: this.calculateLevenshteinDistanceOptimized(
-                                    content.toLowerCase(),
-                                    opts.query_input.toLowerCase()
-                                )
+                                levenshtein_score:
+                                    this.calculateLevenshteinDistanceOptimized(
+                                        content.toLowerCase(),
+                                        opts.query_input.toLowerCase(),
+                                    ),
                             };
                         } catch (error) {
-                            console.warn(`Error processing memory document: ${error}`);
+                            console.warn(
+                                `Error processing memory document: ${error}`,
+                            );
                             return null;
                         }
                     })
-                    .filter((result): result is { embedding: number[]; levenshtein_score: number } =>
-                        result !== null);
+                    .filter(
+                        (
+                            result,
+                        ): result is {
+                            embedding: number[];
+                            levenshtein_score: number;
+                        } => result !== null,
+                    );
 
                 // Merge batch results
-                results = this.mergeAndSortResults(results, batchResults, opts.query_match_count);
+                results = this.mergeAndSortResults(
+                    results,
+                    batchResults,
+                    opts.query_match_count,
+                );
                 processed += memories.length;
 
                 // Log progress for long operations
                 if (totalCount > BATCH_SIZE) {
-                    console.log(`Processed ${processed}/${totalCount} documents`);
+                    console.log(
+                        `Processed ${processed}/${totalCount} documents`,
+                    );
                 }
             }
 
             return results;
-
         } catch (error) {
-            console.error("Error in getCachedEmbeddings:", error);
+            console.error('Error in getCachedEmbeddings:', error);
             if (results.length > 0) {
-                console.log("Returning partial results");
+                console.log('Returning partial results');
                 return results;
             }
             return [];
@@ -673,7 +795,10 @@ export class MongoDBDatabaseAdapter
      * Optimized Levenshtein distance calculation with early termination
      * and matrix reuse for better performance
      */
-    private calculateLevenshteinDistanceOptimized(str1: string, str2: string): number {
+    private calculateLevenshteinDistanceOptimized(
+        str1: string,
+        str2: string,
+    ): number {
         // Early termination for identical strings
         if (str1 === str2) return 0;
 
@@ -687,7 +812,10 @@ export class MongoDBDatabaseAdapter
         }
 
         // Reuse matrix to avoid garbage collection
-        const matrix = this.getLevenshteinMatrix(str1.length + 1, str2.length + 1);
+        const matrix = this.getLevenshteinMatrix(
+            str1.length + 1,
+            str2.length + 1,
+        );
 
         // Initialize first row and column
         for (let i = 0; i <= str1.length; i++) matrix[i][0] = i;
@@ -696,13 +824,13 @@ export class MongoDBDatabaseAdapter
         // Calculate minimum edit distance
         for (let i = 1; i <= str1.length; i++) {
             for (let j = 1; j <= str2.length; j++) {
-                if (str1[i-1] === str2[j-1]) {
-                    matrix[i][j] = matrix[i-1][j-1];
+                if (str1[i - 1] === str2[j - 1]) {
+                    matrix[i][j] = matrix[i - 1][j - 1];
                 } else {
                     matrix[i][j] = Math.min(
-                        matrix[i-1][j-1] + 1,  // substitution
-                        matrix[i][j-1] + 1,    // insertion
-                        matrix[i-1][j] + 1     // deletion
+                        matrix[i - 1][j - 1] + 1, // substitution
+                        matrix[i][j - 1] + 1, // insertion
+                        matrix[i - 1][j] + 1, // deletion
                     );
                 }
             }
@@ -711,14 +839,15 @@ export class MongoDBDatabaseAdapter
         return matrix[str1.length][str2.length];
     }
 
-// Cache for reusing Levenshtein distance matrix
+    // Cache for reusing Levenshtein distance matrix
     private levenshteinMatrix: number[][] = [];
     private maxMatrixSize = 0;
 
     private getLevenshteinMatrix(rows: number, cols: number): number[][] {
         const size = rows * cols;
         if (size > this.maxMatrixSize) {
-            this.levenshteinMatrix = Array(rows).fill(null)
+            this.levenshteinMatrix = Array(rows)
+                .fill(null)
                 .map(() => Array(cols).fill(0));
             this.maxMatrixSize = size;
         }
@@ -731,7 +860,7 @@ export class MongoDBDatabaseAdapter
     private mergeAndSortResults(
         existing: { embedding: number[]; levenshtein_score: number }[],
         newResults: { embedding: number[]; levenshtein_score: number }[],
-        limit: number
+        limit: number,
     ): { embedding: number[]; levenshtein_score: number }[] {
         const merged = [...existing, ...newResults];
 
@@ -751,24 +880,32 @@ export class MongoDBDatabaseAdapter
      */
     private quickSelectTopK(
         arr: { embedding: number[]; levenshtein_score: number }[],
-        k: number
+        k: number,
     ): { embedding: number[]; levenshtein_score: number }[] {
-        if (arr.length <= k) return arr.sort((a, b) => a.levenshtein_score - b.levenshtein_score);
+        if (arr.length <= k)
+            return arr.sort(
+                (a, b) => a.levenshtein_score - b.levenshtein_score,
+            );
 
-        const pivot = arr[Math.floor(Math.random() * arr.length)].levenshtein_score;
-        const left = arr.filter(x => x.levenshtein_score < pivot);
-        const equal = arr.filter(x => x.levenshtein_score === pivot);
-        const right = arr.filter(x => x.levenshtein_score > pivot);
+        const pivot =
+            arr[Math.floor(Math.random() * arr.length)].levenshtein_score;
+        const left = arr.filter((x) => x.levenshtein_score < pivot);
+        const equal = arr.filter((x) => x.levenshtein_score === pivot);
+        const right = arr.filter((x) => x.levenshtein_score > pivot);
 
         if (k <= left.length) {
             return this.quickSelectTopK(left, k);
         }
         if (k <= left.length + equal.length) {
-            return [...left, ...equal.slice(0, k - left.length)]
-                .sort((a, b) => a.levenshtein_score - b.levenshtein_score);
+            return [...left, ...equal.slice(0, k - left.length)].sort(
+                (a, b) => a.levenshtein_score - b.levenshtein_score,
+            );
         }
-        return [...left, ...equal, ...this.quickSelectTopK(right, k - left.length - equal.length)]
-            .sort((a, b) => a.levenshtein_score - b.levenshtein_score);
+        return [
+            ...left,
+            ...equal,
+            ...this.quickSelectTopK(right, k - left.length - equal.length),
+        ].sort((a, b) => a.levenshtein_score - b.levenshtein_score);
     }
 
     async updateGoalStatus(params: {
@@ -776,10 +913,12 @@ export class MongoDBDatabaseAdapter
         status: GoalStatus;
     }): Promise<void> {
         await this.ensureConnection();
-        await this.database.collection('goals').updateOne(
-            { id: params.goalId },
-            { $set: { status: params.status } }
-        );
+        await this.database
+            .collection('goals')
+            .updateOne(
+                { id: params.goalId },
+                { $set: { status: params.status } },
+            );
     }
 
     async log(params: {
@@ -795,7 +934,7 @@ export class MongoDBDatabaseAdapter
             userId: params.userId,
             roomId: params.roomId,
             type: params.type,
-            createdAt: new Date()
+            createdAt: new Date(),
         });
     }
 
@@ -810,16 +949,16 @@ export class MongoDBDatabaseAdapter
     }): Promise<Memory[]> {
         await this.ensureConnection();
         if (!params.tableName) {
-            throw new Error("tableName is required");
+            throw new Error('tableName is required');
         }
         if (!params.roomId) {
-            throw new Error("roomId is required");
+            throw new Error('roomId is required');
         }
 
         const query: any = {
             type: params.tableName,
             agentId: params.agentId,
-            roomId: params.roomId
+            roomId: params.roomId,
         };
 
         if (params.unique) {
@@ -832,17 +971,20 @@ export class MongoDBDatabaseAdapter
             if (params.end) query.createdAt.$lte = new Date(params.end);
         }
 
-        const memories = await this.database.collection('memories')
+        const memories = await this.database
+            .collection('memories')
             .find(query)
             .sort({ createdAt: -1 })
             .limit(params.count || 0)
             .toArray();
 
-        return memories.map(memory => ({
+        return memories.map((memory) => ({
             ...memory,
             createdAt: new Date(memory.createdAt).getTime(),
-            content: typeof memory.content === 'string' ?
-                JSON.parse(memory.content) : memory.content
+            content:
+                typeof memory.content === 'string'
+                    ? JSON.parse(memory.content)
+                    : memory.content,
         }));
     }
 
@@ -850,7 +992,7 @@ export class MongoDBDatabaseAdapter
         await this.ensureConnection();
         await this.database.collection('memories').deleteOne({
             id: memoryId,
-            type: tableName
+            type: tableName,
         });
     }
 
@@ -858,23 +1000,23 @@ export class MongoDBDatabaseAdapter
         await this.ensureConnection();
         await this.database.collection('memories').deleteMany({
             roomId,
-            type: tableName
+            type: tableName,
         });
     }
 
     async countMemories(
         roomId: UUID,
         unique = true,
-        tableName = ""
+        tableName = '',
     ): Promise<number> {
         await this.ensureConnection();
         if (!tableName) {
-            throw new Error("tableName is required");
+            throw new Error('tableName is required');
         }
 
         const query: any = {
             type: tableName,
-            roomId
+            roomId,
         };
 
         if (unique) {
@@ -901,15 +1043,18 @@ export class MongoDBDatabaseAdapter
             query.status = 'IN_PROGRESS';
         }
 
-        const goals = await this.database.collection('goals')
+        const goals = await this.database
+            .collection('goals')
             .find(query)
             .limit(params.count || 0)
             .toArray();
 
-        return goals.map(goal => ({
+        return goals.map((goal) => ({
             ...goal,
-            objectives: typeof goal.objectives === 'string' ?
-                JSON.parse(goal.objectives) : goal.objectives
+            objectives:
+                typeof goal.objectives === 'string'
+                    ? JSON.parse(goal.objectives)
+                    : goal.objectives,
         }));
     }
 
@@ -921,9 +1066,9 @@ export class MongoDBDatabaseAdapter
                 $set: {
                     name: goal.name,
                     status: goal.status,
-                    objectives: JSON.stringify(goal.objectives)
-                }
-            }
+                    objectives: JSON.stringify(goal.objectives),
+                },
+            },
         );
     }
 
@@ -933,7 +1078,7 @@ export class MongoDBDatabaseAdapter
             ...goal,
             id: goal.id ?? v4(),
             objectives: JSON.stringify(goal.objectives),
-            createdAt: new Date()
+            createdAt: new Date(),
         });
     }
 
@@ -949,15 +1094,15 @@ export class MongoDBDatabaseAdapter
 
     async createRoom(roomId?: UUID): Promise<UUID> {
         await this.ensureConnection();
-        const newRoomId = roomId || v4() as UUID;
+        const newRoomId = roomId || (v4() as UUID);
         try {
             await this.database.collection('rooms').insertOne({
                 id: newRoomId,
-                createdAt: new Date()
+                createdAt: new Date(),
             });
             return newRoomId;
         } catch (error) {
-            console.error("Error creating room:", error);
+            console.error('Error creating room:', error);
             throw error; // Throw error instead of silently continuing
         }
     }
@@ -967,23 +1112,25 @@ export class MongoDBDatabaseAdapter
         try {
             await this.database.collection('rooms').deleteOne({ id: roomId });
         } catch (error) {
-            console.error("Error removing room:", error);
+            console.error('Error removing room:', error);
             throw error;
         }
     }
 
     async getRoomsForParticipant(userId: UUID): Promise<UUID[]> {
         await this.ensureConnection();
-        const rooms = await this.database.collection('participants')
+        const rooms = await this.database
+            .collection('participants')
             .find({ userId })
             .project({ roomId: 1 })
             .toArray();
-        return rooms.map(r => r.roomId);
+        return rooms.map((r) => r.roomId);
     }
 
     async getRoomsForParticipants(userIds: UUID[]): Promise<UUID[]> {
         await this.ensureConnection();
-        const rooms = await this.database.collection('participants')
+        const rooms = await this.database
+            .collection('participants')
             .distinct('roomId', { userId: { $in: userIds } });
         return rooms;
     }
@@ -995,11 +1142,11 @@ export class MongoDBDatabaseAdapter
                 id: v4(),
                 userId,
                 roomId,
-                createdAt: new Date()
+                createdAt: new Date(),
             });
             return true;
         } catch (error) {
-            console.log("Error adding participant", error);
+            console.log('Error adding participant', error);
             return false;
         }
     }
@@ -1009,11 +1156,11 @@ export class MongoDBDatabaseAdapter
         try {
             await this.database.collection('participants').deleteOne({
                 userId,
-                roomId
+                roomId,
             });
             return true;
         } catch (error) {
-            console.log("Error removing participant", error);
+            console.log('Error removing participant', error);
             return false;
         }
     }
@@ -1024,7 +1171,7 @@ export class MongoDBDatabaseAdapter
     }): Promise<boolean> {
         await this.ensureConnection();
         if (!params.userA || !params.userB) {
-            throw new Error("userA and userB are required");
+            throw new Error('userA and userB are required');
         }
 
         try {
@@ -1033,11 +1180,11 @@ export class MongoDBDatabaseAdapter
                 userA: params.userA,
                 userB: params.userB,
                 userId: params.userA,
-                createdAt: new Date()
+                createdAt: new Date(),
             });
             return true;
         } catch (error) {
-            console.log("Error creating relationship", error);
+            console.log('Error creating relationship', error);
             return false;
         }
     }
@@ -1050,19 +1197,17 @@ export class MongoDBDatabaseAdapter
         return await this.database.collection('relationships').findOne({
             $or: [
                 { userA: params.userA, userB: params.userB },
-                { userA: params.userB, userB: params.userA }
-            ]
+                { userA: params.userB, userB: params.userA },
+            ],
         });
     }
 
     async getRelationships(params: { userId: UUID }): Promise<Relationship[]> {
         await this.ensureConnection();
-        return await this.database.collection('relationships')
+        return await this.database
+            .collection('relationships')
             .find({
-                $or: [
-                    { userA: params.userId },
-                    { userB: params.userId }
-                ]
+                $or: [{ userA: params.userId }, { userB: params.userId }],
             })
             .toArray();
     }
@@ -1072,12 +1217,11 @@ export class MongoDBDatabaseAdapter
         agentId: UUID;
     }): Promise<string | undefined> {
         await this.ensureConnection();
-        const cached = await this.database.collection('cache')
-            .findOne({
-                key: params.key,
-                agentId: params.agentId,
-                expiresAt: { $gt: new Date() }
-            });
+        const cached = await this.database.collection('cache').findOne({
+            key: params.key,
+            agentId: params.agentId,
+            expiresAt: { $gt: new Date() },
+        });
         return cached?.value;
     }
 
@@ -1094,14 +1238,14 @@ export class MongoDBDatabaseAdapter
                     $set: {
                         value: params.value,
                         createdAt: new Date(),
-                        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours expiry
-                    }
+                        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours expiry
+                    },
                 },
-                { upsert: true }
+                { upsert: true },
             );
             return true;
         } catch (error) {
-            console.log("Error setting cache", error);
+            console.log('Error setting cache', error);
             return false;
         }
     }
@@ -1114,11 +1258,11 @@ export class MongoDBDatabaseAdapter
         try {
             await this.database.collection('cache').deleteOne({
                 key: params.key,
-                agentId: params.agentId
+                agentId: params.agentId,
             });
             return true;
         } catch (error) {
-            console.log("Error removing cache", error);
+            console.log('Error removing cache', error);
             return false;
         }
     }
@@ -1132,27 +1276,33 @@ export class MongoDBDatabaseAdapter
         await this.ensureConnection();
 
         const query: any = {
-            $or: [
-                { agentId: params.agentId },
-                { isShared: true }
-            ]
+            $or: [{ agentId: params.agentId }, { isShared: true }],
         };
 
         if (params.id) {
             query.id = params.id;
         }
 
-        const knowledge = await this.database.collection('knowledge')
+        const knowledge = await this.database
+            .collection('knowledge')
             .find(query)
             .limit(params.limit || 0)
             .toArray();
 
-        return knowledge.map(item => ({
+        return knowledge.map((item) => ({
             id: item.id,
             agentId: item.agentId,
-            content: typeof item.content === 'string' ? JSON.parse(item.content) : item.content,
-            embedding: item.embedding ? new Float32Array(item.embedding) : undefined,
-            createdAt: typeof item.createdAt === "string" ? Date.parse(item.createdAt) : item.createdAt
+            content:
+                typeof item.content === 'string'
+                    ? JSON.parse(item.content)
+                    : item.content,
+            embedding: item.embedding
+                ? new Float32Array(item.embedding)
+                : undefined,
+            createdAt:
+                typeof item.createdAt === 'string'
+                    ? Date.parse(item.createdAt)
+                    : item.createdAt,
         }));
     }
 
@@ -1168,7 +1318,7 @@ export class MongoDBDatabaseAdapter
         const cacheKey = `embedding_${params.agentId}_${params.searchText}`;
         const cachedResult = await this.getCache({
             key: cacheKey,
-            agentId: params.agentId
+            agentId: params.agentId,
         });
 
         if (cachedResult) {
@@ -1182,31 +1332,42 @@ export class MongoDBDatabaseAdapter
                 try {
                     results = await this.vectorSearchKnowledge(params);
                 } catch (error) {
-                    console.log("Vector search failed, falling back to standard search", error);
+                    console.log(
+                        'Vector search failed, falling back to standard search',
+                        error,
+                    );
                     results = await this.fallbackSearchKnowledge(params);
                 }
             } else {
                 results = await this.fallbackSearchKnowledge(params);
             }
 
-            const mappedResults = results.map(item => ({
+            const mappedResults = results.map((item) => ({
                 id: item.id,
                 agentId: item.agentId, // This will always be UUID
-                content: typeof item.content === 'string' ? JSON.parse(item.content) : item.content,
-                embedding: item.embedding ? new Float32Array(item.embedding) : undefined,
-                createdAt: typeof item.createdAt === "string" ? Date.parse(item.createdAt) : item.createdAt,
-                similarity: (item as any).combinedScore || 0
+                content:
+                    typeof item.content === 'string'
+                        ? JSON.parse(item.content)
+                        : item.content,
+                embedding: item.embedding
+                    ? new Float32Array(item.embedding)
+                    : undefined,
+                createdAt:
+                    typeof item.createdAt === 'string'
+                        ? Date.parse(item.createdAt)
+                        : item.createdAt,
+                similarity: (item as any).combinedScore || 0,
             })) as RAGKnowledgeItem[];
 
             await this.setCache({
                 key: cacheKey,
                 agentId: params.agentId,
-                value: JSON.stringify(mappedResults)
+                value: JSON.stringify(mappedResults),
             });
 
             return mappedResults;
         } catch (error) {
-            console.error("Error in searchKnowledge:", error);
+            console.error('Error in searchKnowledge:', error);
             throw error;
         }
     }
@@ -1223,17 +1384,18 @@ export class MongoDBDatabaseAdapter
                 $search: {
                     vectorSearch: {
                         queryVector: Array.from(params.embedding),
-                        path: "embedding",
+                        path: 'embedding',
                         numCandidates: params.match_count * 2,
                         limit: params.match_count * 2,
-                        index: "vector_index"
-                    }
-                }
+                        index: 'vector_index',
+                    },
+                },
             },
-            ...this.getKnowledgeSearchPipeline(params)
+            ...this.getKnowledgeSearchPipeline(params),
         ];
 
-        return await this.database.collection('knowledge')
+        return await this.database
+            .collection('knowledge')
             .aggregate(pipeline)
             .toArray();
     }
@@ -1250,14 +1412,15 @@ export class MongoDBDatabaseAdapter
                 $match: {
                     $or: [
                         { agentId: params.agentId },
-                        { isShared: true, agentId: null }
-                    ]
-                }
+                        { isShared: true, agentId: null },
+                    ],
+                },
             },
-            ...this.getKnowledgeSearchPipeline(params)
+            ...this.getKnowledgeSearchPipeline(params),
         ];
 
-        return await this.database.collection('knowledge')
+        return await this.database
+            .collection('knowledge')
             .aggregate(pipeline)
             .toArray();
     }
@@ -1271,38 +1434,57 @@ export class MongoDBDatabaseAdapter
         return [
             {
                 $addFields: {
-                    vectorScore: this.hasVectorSearch ?
-                        { $meta: "vectorSearchScore" } :
-                        {
-                            $let: {
-                                vars: {
-                                    embedding: { $ifNull: ["$embedding", []] }
-                                },
-                                in: {
-                                    $cond: [
-                                        { $eq: [{ $size: "$$embedding" }, 0] },
-                                        0,
-                                        {
-                                            $divide: [
-                                                1,
-                                                { $add: [1, { $function: {
-                                                            body: this.cosineSimilarity.toString(),
-                                                            args: [params.embedding, "$$embedding"],
-                                                            lang: "js"
-                                                        }}] }
-                                            ]
-                                        }
-                                    ]
-                                }
-                            }
-                        },
-                    keywordScore: this.calculateKeywordScore(params.searchText)
-                }
+                    vectorScore: this.hasVectorSearch
+                        ? { $meta: 'vectorSearchScore' }
+                        : {
+                              $let: {
+                                  vars: {
+                                      embedding: {
+                                          $ifNull: ['$embedding', []],
+                                      },
+                                  },
+                                  in: {
+                                      $cond: [
+                                          {
+                                              $eq: [
+                                                  { $size: '$$embedding' },
+                                                  0,
+                                              ],
+                                          },
+                                          0,
+                                          {
+                                              $divide: [
+                                                  1,
+                                                  {
+                                                      $add: [
+                                                          1,
+                                                          {
+                                                              $function: {
+                                                                  body: this.cosineSimilarity.toString(),
+                                                                  args: [
+                                                                      params.embedding,
+                                                                      '$$embedding',
+                                                                  ],
+                                                                  lang: 'js',
+                                                              },
+                                                          },
+                                                      ],
+                                                  },
+                                              ],
+                                          },
+                                      ],
+                                  },
+                              },
+                          },
+                    keywordScore: this.calculateKeywordScore(params.searchText),
+                },
             },
             {
                 $addFields: {
-                    combinedScore: { $multiply: ["$vectorScore", "$keywordScore"] }
-                }
+                    combinedScore: {
+                        $multiply: ['$vectorScore', '$keywordScore'],
+                    },
+                },
             },
             {
                 $match: {
@@ -1311,13 +1493,13 @@ export class MongoDBDatabaseAdapter
                         {
                             $and: [
                                 { keywordScore: { $gt: 1.0 } },
-                                { vectorScore: { $gte: 0.3 } }
-                            ]
-                        }
-                    ]
-                }
+                                { vectorScore: { $gte: 0.3 } },
+                            ],
+                        },
+                    ],
+                },
             },
-            { $sort: { combinedScore: -1 } }
+            { $sort: { combinedScore: -1 } },
         ];
     }
 
@@ -1326,30 +1508,34 @@ export class MongoDBDatabaseAdapter
             $multiply: [
                 {
                     $cond: [
-                        searchText ? {
-                            $regexMatch: {
-                                input: { $toLower: "$content.text" },
-                                regex: new RegExp(searchText.toLowerCase())
-                            }
-                        } : false,
+                        searchText
+                            ? {
+                                  $regexMatch: {
+                                      input: { $toLower: '$content.text' },
+                                      regex: new RegExp(
+                                          searchText.toLowerCase(),
+                                      ),
+                                  },
+                              }
+                            : false,
                         3.0,
-                        1.0
-                    ]
+                        1.0,
+                    ],
                 },
                 {
                     $cond: [
-                        { $eq: ["$content.metadata.isChunk", true] },
+                        { $eq: ['$content.metadata.isChunk', true] },
                         1.5,
                         {
                             $cond: [
-                                { $eq: ["$content.metadata.isMain", true] },
+                                { $eq: ['$content.metadata.isMain', true] },
                                 1.2,
-                                1.0
-                            ]
-                        }
-                    ]
-                }
-            ]
+                                1.0,
+                            ],
+                        },
+                    ],
+                },
+            ],
         };
     }
 
@@ -1364,33 +1550,43 @@ export class MongoDBDatabaseAdapter
             const doc = {
                 id: knowledge.id,
                 agentId: knowledge.agentId,
-                content: typeof knowledge.content === 'string' ?
-                    knowledge.content :
-                    JSON.stringify(knowledge.content),
-                embedding: knowledge.embedding ? Array.from(knowledge.embedding) : null,
+                content:
+                    typeof knowledge.content === 'string'
+                        ? knowledge.content
+                        : JSON.stringify(knowledge.content),
+                embedding: knowledge.embedding
+                    ? Array.from(knowledge.embedding)
+                    : null,
                 createdAt: knowledge.createdAt || Date.now(),
                 isMain: metadata.isMain || false,
                 originalId: metadata.originalId || null,
                 chunkIndex: metadata.chunkIndex || null,
-                isShared
+                isShared,
             };
 
-            await this.database.collection('knowledge').updateOne(
-                { id: knowledge.id },
-                { $setOnInsert: doc },
-                { upsert: true }
-            );
+            await this.database
+                .collection('knowledge')
+                .updateOne(
+                    { id: knowledge.id },
+                    { $setOnInsert: doc },
+                    { upsert: true },
+                );
         } catch (err) {
             if (err instanceof Error) {
                 const error = err as Error & { code?: number };
                 const isShared = knowledge.content.metadata?.isShared;
 
                 if (isShared && error.code === 11000) {
-                    console.info(`Shared knowledge ${knowledge.id} already exists, skipping`);
+                    console.info(
+                        `Shared knowledge ${knowledge.id} already exists, skipping`,
+                    );
                     return;
                 }
 
-                console.error(`Error creating knowledge ${knowledge.id}:`, error);
+                console.error(
+                    `Error creating knowledge ${knowledge.id}:`,
+                    error,
+                );
                 throw error;
             }
             throw err;
@@ -1404,36 +1600,46 @@ export class MongoDBDatabaseAdapter
 
     async clearKnowledge(agentId: UUID, shared?: boolean): Promise<void> {
         await this.ensureConnection();
-        const query = shared ?
-            { $or: [{ agentId }, { isShared: true }] } :
-            { agentId };
+        const query = shared
+            ? { $or: [{ agentId }, { isShared: true }] }
+            : { agentId };
 
         try {
             await this.database.collection('knowledge').deleteMany(query);
         } catch (error) {
-            console.error(`Error clearing knowledge for agent ${agentId}:`, error);
+            console.error(
+                `Error clearing knowledge for agent ${agentId}:`,
+                error,
+            );
             throw error;
         }
     }
 
-    async getMemoriesByIds(memoryIds: UUID[], tableName?: string): Promise<Memory[]> {
+    async getMemoriesByIds(
+        memoryIds: UUID[],
+        tableName?: string,
+    ): Promise<Memory[]> {
         await this.ensureConnection();
         const collection = tableName || 'memories';
 
         try {
-            const memories = await this.database.collection(collection)
+            const memories = await this.database
+                .collection(collection)
                 .find({ id: { $in: memoryIds } })
                 .toArray();
 
-            return memories.map(memory => ({
+            return memories.map((memory) => ({
                 id: memory.id,
                 roomId: memory.roomId,
                 agentId: memory.agentId,
                 type: memory.type,
                 content: memory.content,
                 embedding: memory.embedding,
-                createdAt: memory.createdAt instanceof Date ? memory.createdAt.getTime() : memory.createdAt,
-                metadata: memory.metadata || {}
+                createdAt:
+                    memory.createdAt instanceof Date
+                        ? memory.createdAt.getTime()
+                        : memory.createdAt,
+                metadata: memory.metadata || {},
             }));
         } catch (error) {
             elizaLogger.error('Failed to get memories by IDs:', error);
@@ -1441,13 +1647,31 @@ export class MongoDBDatabaseAdapter
         }
     }
 
-    async insert(tableName: string, record: any){
+    async insert(tableName: string, record: any) {
         await this.ensureConnection();
         await this.database.collection(tableName).insertOne({
             ...record,
             createdAt: new Date(),
-        })
+        });
     }
 
-}
+    async upsert(tableName: string, record: any) {
+        await this.ensureConnection();
+        await this.database
+            .collection(tableName)
+            .updateOne({ id: record.id }, { $set: record }, { upsert: true });
+    }
 
+    async query(tableName: string, query: any) {
+        await this.ensureConnection();
+        try {
+            return await this.database
+                .collection(tableName)
+                .find(query)
+                .toArray();
+        } catch (error) {
+            console.error(`Error querying ${tableName}:`, error);
+            return {};
+        }
+    }
+}
