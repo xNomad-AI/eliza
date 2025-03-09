@@ -1674,4 +1674,19 @@ export class MongoDBDatabaseAdapter
             return {};
         }
     }
+
+    async queryLatestTask(tableName: string, query: any) {
+        await this.ensureConnection();
+        try {
+            return await this.database
+                .collection(tableName)
+                .find(query)
+                .sort({ taskId: -1 })
+                .limit(1)
+                .toArray();
+        } catch (error) {
+            console.error(`Error querying latest from ${tableName}:`, error);
+            return [];
+        }
+    }
 }

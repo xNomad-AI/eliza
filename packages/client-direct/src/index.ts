@@ -219,7 +219,6 @@ export class DirectClient {
                 }
                 const userId = stringToUuid(req.body.userId ?? 'user');
 
-                const taskId = req.body.taskId ?? 4;
                 let runtime = this.agents.get(agentId);
 
                 // if runtime is null, look for runtime with the same name
@@ -306,25 +305,36 @@ export class DirectClient {
                     roomId,
                     agentId,
                     userId,
-                    taskId,
+                    taskId: 0,
                     pastActions: [],
                 };
                 if (
-                    'query' in runtime.databaseAdapter &&
-                    typeof runtime.databaseAdapter.query === 'function'
+                    'queryLatestTask' in runtime.databaseAdapter &&
+                    typeof runtime.databaseAdapter.queryLatestTask ===
+                        'function'
                 ) {
                     const query = {
                         roomId,
                         agentId,
                         userId,
-                        taskId,
                     };
-                    const result = await runtime.databaseAdapter.query(
-                        'tasks',
-                        query,
-                    );
-                    if (result.length > 0) {
-                        task_record.pastActions = result[0].pastActions;
+                    const result =
+                        await runtime.databaseAdapter.queryLatestTask(
+                            'tasks',
+                            query,
+                        );
+                    console.log('result', JSON.stringify(result));
+                    const lastestTask = result?.[0];
+                    console.log('lastestTask', JSON.stringify(lastestTask));
+                    if (
+                        lastestTask?.pastActions?.length > 0 &&
+                        lastestTask.pastActions[
+                            lastestTask.pastActions.length - 1
+                        ]?.action === 'WRAP_UP'
+                    ) {
+                        task_record.taskId = lastestTask.taskId + 1;
+                    } else if (lastestTask) {
+                        task_record = lastestTask;
                     }
                 }
                 console.log('task_record', task_record);
