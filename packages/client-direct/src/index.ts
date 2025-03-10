@@ -306,6 +306,7 @@ export class DirectClient {
                     agentId,
                     userId,
                     taskId: 0,
+                    taskDefinition: text,
                     pastActions: [],
                 };
                 if (
@@ -343,28 +344,35 @@ export class DirectClient {
                 const recentMessages = await runtime.messageManager.getMemories(
                     {
                         roomId,
-                        count: 10,
+                        count: 5,
                         unique: false,
                     },
                 );
 
                 // convert into the request format of agent-router
-                const chatHistory = recentMessages.map((msg) => {
-                    const role =
-                        msg.userId === runtime.agentId ? 'assistant' : 'user';
-                    return {
-                        role,
-                        content: msg.content.text || '',
-                    };
-                });
-
+                console.log('recentMessages', recentMessages);
+                const chatHistory = recentMessages
+                    .slice()
+                    .reverse()
+                    .map((msg, idx) => {
+                        const role =
+                            msg.userId === runtime.agentId
+                                ? 'assistant'
+                                : 'user';
+                        return {
+                            role,
+                            content: msg.content.text || '',
+                            idx: idx,
+                        };
+                    });
+                console.log('chatHistory', chatHistory);
                 for (let stepCnt = 0; stepCnt < 5; stepCnt++) {
                     let shouldReturn = false;
 
                     // call agent router to get response
                     const body = {
                         chat_history: chatHistory,
-                        user_request: text,
+                        user_request: task_record.taskDefinition,
                         past_steps: task_record?.pastActions || [],
                     };
                     console.log('body', body);
