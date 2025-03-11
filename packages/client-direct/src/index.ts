@@ -372,7 +372,7 @@ export class DirectClient {
                     // call agent router to get response
                     const body = {
                         chat_history: chatHistory,
-                        user_request: task_record.taskDefinition,
+                        task_definition: task_record.taskDefinition,
                         past_steps: task_record?.pastActions || [],
                     };
                     console.log('body', body);
@@ -408,10 +408,6 @@ export class DirectClient {
                             text: agentRouterResponse.parameters.message,
                             action: agentRouterResponse.action,
                         };
-                        console.log(
-                            'actionResponseMessage',
-                            actionResponseMessage,
-                        );
                         shouldReturn = true;
                     } else {
                         state = await runtime.composeState(userMessage, {
@@ -444,22 +440,33 @@ export class DirectClient {
                     console.log('actionResponseMessage', actionResponseMessage);
                     task_record.pastActions.push({
                         action: agentRouterResponse.action,
-                        result: actionResponseMessage.text,
+                        detail: agentRouterResponse.explanation,
+                        result:
+                            actionResponseMessage?.result ||
+                            actionResponseMessage?.text,
                     });
 
-                    responseMessages.push(actionResponseMessage);
-                    const resMemory: Memory = {
-                        id: stringToUuid(Date.now().toString()),
-                        roomId: userMessage.roomId,
-                        userId: runtime.agentId,
-                        agentId: runtime.agentId,
-                        content: actionResponseMessage,
-                        embedding: getEmbeddingZeroVector(),
-                        createdAt: Date.now(),
-                    };
-                    console.log('resMemory', resMemory);
-                    state = await runtime.updateRecentMessageState(state);
-                    await runtime.messageManager.createMemory(resMemory, true);
+                    if (
+                        agentRouterResponse.action === 'WRAP_UP' ||
+                        shouldReturn === true
+                    ) {
+                        responseMessages.push(actionResponseMessage);
+                        const resMemory: Memory = {
+                            id: stringToUuid(Date.now().toString()),
+                            roomId: userMessage.roomId,
+                            userId: runtime.agentId,
+                            agentId: runtime.agentId,
+                            content: actionResponseMessage,
+                            embedding: getEmbeddingZeroVector(),
+                            createdAt: Date.now(),
+                        };
+                        console.log('resMemory', resMemory);
+                        state = await runtime.updateRecentMessageState(state);
+                        await runtime.messageManager.createMemory(
+                            resMemory,
+                            true,
+                        );
+                    }
 
                     if (shouldReturn) {
                         break;
