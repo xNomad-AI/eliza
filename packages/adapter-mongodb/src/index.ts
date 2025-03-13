@@ -1449,5 +1449,10 @@ export class MongoDBDatabaseAdapter
         })
     }
 
+    async find(tableName: string, filter: any, options?: any){
+        await this.ensureConnection();
+        return await this.database.collection(tableName).find(filter).toArray();
+    }
+
 }
 

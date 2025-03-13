@@ -1150,6 +1150,7 @@ export interface IDatabaseAdapter {
     removeKnowledge(id: UUID): Promise<void>;
     clearKnowledge(agentId: UUID, shared?: boolean): Promise<void>;
     insert?(tableName: string, record: any): Promise<void>;
+    find?(tableName: string, filter: any, options?: any): Promise<any[]>;
 }
 
 export interface IDatabaseCacheAdapter {
