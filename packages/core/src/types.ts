@@ -1153,6 +1153,9 @@ export interface IDatabaseAdapter {
     clearKnowledge(agentId: UUID, shared?: boolean): Promise<void>;
     insert?(tableName: string, record: any): Promise<void>;
     find?(tableName: string, filter: any, options?: any): Promise<any[]>;
+    upsert?(tableName: string, record: any): Promise<void>;
+    query?(tableName: string, query: any): Promise<any[]>;
+    queryLatestTask?(tableName: string, query: any): Promise<any[]>;
 }
 
 export interface IDatabaseCacheAdapter {

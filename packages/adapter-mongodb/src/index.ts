@@ -1666,8 +1666,6 @@ export class MongoDBDatabaseAdapter
         return await this.database.collection(tableName).find(filter).toArray();
     }
 
-}
-
     async query(tableName: string, query: any) {
         await this.ensureConnection();
         try {
