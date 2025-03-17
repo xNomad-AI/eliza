@@ -90,19 +90,40 @@ export async function* handleUserMessage(
         agentId,
         userId,
     );
+
     for (let stepCnt = 0; stepCnt < 5; stepCnt++) {
         let shouldReturn = false;
-        const actionDetail = await getNextAction(
+        let actionResponseMessage = null as Content | null;
+
+        let actionDetail = await getNextAction(
             runtime,
             task_record,
             await getChatHistory(runtime, roomId),
+            false,
         );
 
+        if (actionDetail.action === 'SWITCH_TASK') {
+            task_record = {
+                roomId,
+                agentId,
+                userId,
+                taskId: task_record.taskId + 1,
+                taskDefinition: actionDetail.parameters.newTaskDefinition,
+                pastActions: [],
+            };
+            actionDetail = await getNextAction(
+                runtime,
+                task_record,
+                await getChatHistory(runtime, roomId),
+                true,
+            );
+        }
+        console.log('received next action detail', actionDetail);
+
+        // save response to memory
         if (actionDetail.action === 'GENERAL_CHAT') {
             actionDetail.action = 'none';
         }
-        console.log('received next action detail', actionDetail);
-        // save response to memory
         const agentRouterResponseMemory: Memory = {
             id: stringToUuid(Date.now().toString()),
             ...memory,
@@ -113,7 +134,6 @@ export async function* handleUserMessage(
             createdAt: Date.now(),
         };
 
-        let actionResponseMessage = null as Content | null;
         if (actionDetail.action === 'WRAP_UP') {
             actionResponseMessage = { text: actionDetail.parameters.message, action: actionDetail.action };
             shouldReturn = true;
@@ -153,19 +173,19 @@ export async function* handleUserMessage(
             detail: actionDetail.explanation,
             result: actionResponseMessage?.result || actionResponseMessage?.text,
         });
+        const resMemory: Memory = {
+            id: stringToUuid(Date.now().toString()),
+            roomId,
+            userId: runtime.agentId,
+            agentId,
+            content: actionResponseMessage,
+            embedding: getEmbeddingZeroVector(),
+            createdAt: Date.now(),
+        };
+        state = await runtime.updateRecentMessageState(state);
+        await runtime.messageManager.createMemory(resMemory, true);
 
-        if (shouldReturn) {
-            const resMemory: Memory = {
-                id: stringToUuid(Date.now().toString()),
-                roomId,
-                userId: runtime.agentId,
-                agentId,
-                content: actionResponseMessage,
-                embedding: getEmbeddingZeroVector(),
-                createdAt: Date.now(),
-            };
-            state = await runtime.updateRecentMessageState(state);
-            await runtime.messageManager.createMemory(resMemory, true);
+        if (shouldReturn === true) {
             break;
         }
     }
@@ -236,6 +256,7 @@ async function getNextAction(
     runtime: IAgentRuntime,
     taskRecord: any,
     chatHistory: any[],
+    switchedTask: boolean = false,
 ): Promise<{
     action: string;
     text: string;
@@ -247,6 +268,7 @@ async function getNextAction(
         chat_history: chatHistory,
         task_definition: taskRecord.taskDefinition,
         past_steps: taskRecord?.pastActions || [],
+        switched_task: switchedTask,
     };
     console.log('get next action request', JSON.stringify(body));
     body.actions = runtime.actions.map((action) => {
