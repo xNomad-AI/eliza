@@ -93,8 +93,7 @@ export async function* handleUserMessage(
     for (let stepCnt = 0; stepCnt < 5; stepCnt++) {
         let shouldReturn = false;
         const actionDetail = await getNextAction(runtime, task_record, await getChatHistory(runtime, roomId));
-        elizaLogger.log('received next action detail', actionDetail);
-        // save response to memory
+        console.log('get next action result', JSON.stringify(actionDetail));
         const agentRouterResponseMemory: Memory = {
             id: stringToUuid(Date.now().toString()),
             ...memory,
@@ -130,9 +129,6 @@ export async function* handleUserMessage(
             shouldReturn = actionsProcessResult.some((processResult) => processResult === false || processResult);
             if (!shouldReturn && actionResponseMessage?.isError){
                 shouldReturn = true;
-            }
-            if (shouldReturn){
-                break;
             }
         }
         yield actionResponseMessage;
@@ -236,6 +232,7 @@ async function getNextAction(
         task_definition: taskRecord.taskDefinition,
         past_steps: taskRecord?.pastActions || [],
     };
+    console.log('get next action request', JSON.stringify(body));
     body.actions = runtime.actions.map((action) => {
         return action.functionCallSpec;
     });
