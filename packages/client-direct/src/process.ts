@@ -6,16 +6,17 @@ import {
     Media,
     Memory,
     stringToUuid,
-    UUID
-} from "@elizaos/core";
-import path from "path";
-import express from "express";
+    UUID,
+} from '@elizaos/core';
+import path from 'path';
+import express from 'express';
 
-export async function getUserMessage(runtime: IAgentRuntime, req: express.Request){
+export async function getUserMessage(
+    runtime: IAgentRuntime,
+    req: express.Request,
+) {
     const agentId = runtime.agentId;
-    const roomId = stringToUuid(
-        req.body.roomId ?? 'default-room-' + agentId,
-    );
+    const roomId = stringToUuid(req.body.roomId ?? 'default-room-' + agentId);
     const accessToken = req.body?.accessToken;
     const userId = stringToUuid(req.body.userId ?? 'user');
     await runtime.ensureConnection(
@@ -76,15 +77,32 @@ export async function getUserMessage(runtime: IAgentRuntime, req: express.Reques
     return memory;
 }
 
-export async function handleUserMessage(runtime: IAgentRuntime, memory: Memory) {
-    const {roomId, agentId, userId, content} = memory;
+export async function handleUserMessage(
+    runtime: IAgentRuntime,
+    memory: Memory,
+) {
+    const { roomId, agentId, userId, content } = memory;
     let state = await runtime.composeState(memory, {});
     const responseMessages = [];
-    const task_record = await getTaskRecord(runtime, content.text, roomId, agentId, userId);
+    const task_record = await getTaskRecord(
+        runtime,
+        content.text,
+        roomId,
+        agentId,
+        userId,
+    );
     for (let stepCnt = 0; stepCnt < 5; stepCnt++) {
         let shouldReturn = false;
-        const actionDetail = await getNextAction(runtime, task_record, await getChatHistory(runtime, roomId));
+        const actionDetail = await getNextAction(
+            runtime,
+            task_record,
+            await getChatHistory(runtime, roomId),
+        );
+        // if (actionDetail.action === 'GENERAL_CHAT') {
+        //     actionDetail.action = null;
+        // }
         elizaLogger.log('received next action detail', actionDetail);
+        console.log('received next action detail', actionDetail);
         // save response to memory
         const agentRouterResponseMemory: Memory = {
             id: stringToUuid(Date.now().toString()),
@@ -104,31 +122,28 @@ export async function handleUserMessage(runtime: IAgentRuntime, memory: Memory) 
             };
             shouldReturn = true;
         } else {
-            const actionsProcessResult =
-                await runtime.processActions(
-                    memory,
-                    [agentRouterResponseMemory],
-                    await runtime.composeState(memory, {
-                        agentName: runtime.character.name,
-                        actionParameters: actionDetail.parameters,
-                    }),
-                    async (actionResponse) => {
-                        actionResponseMessage = actionResponse;
-                        return [memory];
-                    },
-                );
-            responseMessages.push(actionResponseMessage);
-            shouldReturn = actionsProcessResult.some((processResult) => processResult === false);
-            if (shouldReturn) {
-                break;
-            }
+            const actionsProcessResult = await runtime.processActions(
+                memory,
+                [agentRouterResponseMemory],
+                await runtime.composeState(memory, {
+                    agentName: runtime.character.name,
+                    actionParameters: actionDetail.parameters,
+                }),
+                async (actionResponse) => {
+                    actionResponseMessage = actionResponse;
+                    return [memory];
+                },
+            );
+            shouldReturn = actionsProcessResult.some(
+                (processResult) => processResult === false,
+            );
         }
+        responseMessages.push(actionResponseMessage);
         task_record.pastActions.push({
             action: actionDetail.action,
             detail: actionDetail.explanation,
             result:
-                actionResponseMessage?.result ||
-                actionResponseMessage?.text,
+                actionResponseMessage?.result || actionResponseMessage?.text,
         });
 
         if (shouldReturn === true) {
@@ -142,10 +157,7 @@ export async function handleUserMessage(runtime: IAgentRuntime, memory: Memory) 
                 createdAt: Date.now(),
             };
             state = await runtime.updateRecentMessageState(state);
-            await runtime.messageManager.createMemory(
-                resMemory,
-                true,
-            );
+            await runtime.messageManager.createMemory(resMemory, true);
             break;
         }
     }
@@ -153,28 +165,28 @@ export async function handleUserMessage(runtime: IAgentRuntime, memory: Memory) 
     return responseMessages;
 }
 
-async function getChatHistory(runtime: IAgentRuntime, roomId: UUID): Promise<{
-    role: string;
-    content: string;
-    idx: number;
-}[]> {
+async function getChatHistory(
+    runtime: IAgentRuntime,
+    roomId: UUID,
+): Promise<
+    {
+        role: string;
+        content: string;
+        idx: number;
+    }[]
+> {
     // get recent messages
-    const recentMessages = await runtime.messageManager.getMemories(
-        {
-            roomId,
-            count: 5,
-            unique: false,
-        },
-    );
+    const recentMessages = await runtime.messageManager.getMemories({
+        roomId,
+        count: 5,
+        unique: false,
+    });
     // convert into the request format of agent-router
     return recentMessages
         .slice()
         .reverse()
         .map((msg, idx) => {
-            const role =
-                msg.userId === runtime.agentId
-                    ? 'assistant'
-                    : 'user';
+            const role = msg.userId === runtime.agentId ? 'assistant' : 'user';
             return {
                 role,
                 content: msg.content.text || '',
@@ -183,7 +195,13 @@ async function getChatHistory(runtime: IAgentRuntime, roomId: UUID): Promise<{
         });
 }
 
-async function getTaskRecord(runtime: IAgentRuntime, text: string, roomId: string, agentId: string, userId: string){
+async function getTaskRecord(
+    runtime: IAgentRuntime,
+    text: string,
+    roomId: string,
+    agentId: string,
+    userId: string,
+) {
     // query tasks
     let task_record = {
         roomId,
@@ -193,15 +211,11 @@ async function getTaskRecord(runtime: IAgentRuntime, text: string, roomId: strin
         taskDefinition: text,
         pastActions: [],
     };
-    const result =
-        await runtime.databaseAdapter.queryLatestTask?.(
-            'tasks',
-            {
-                roomId,
-                agentId,
-                userId,
-            },
-        );
+    const result = await runtime.databaseAdapter.queryLatestTask?.('tasks', {
+        roomId,
+        agentId,
+        userId,
+    });
     const lastestTask = result?.[0];
     if (lastestTask?.pastActions?.at(-1)?.action === 'WRAP_UP') {
         task_record.taskId = lastestTask.taskId + 1;
@@ -211,22 +225,27 @@ async function getTaskRecord(runtime: IAgentRuntime, text: string, roomId: strin
     return task_record;
 }
 
-async function getNextAction(runtime: IAgentRuntime, taskRecord: any, chatHistory: any[]): Promise<{
+async function getNextAction(
+    runtime: IAgentRuntime,
+    taskRecord: any,
+    chatHistory: any[],
+): Promise<{
     action: string;
     text: string;
     parameters: any;
     explanation: string;
-}>{
+}> {
     // call agent router to get response
-    const body : any = {
+    const body: any = {
         chat_history: chatHistory,
         task_definition: taskRecord.taskDefinition,
         past_steps: taskRecord?.pastActions || [],
     };
-    elizaLogger.log('get next action request', JSON.stringify(body));
     body.actions = runtime.actions.map((action) => {
-        return action.functionCallSpec
+        return action.functionCallSpec;
     });
+    elizaLogger.log('get next action request', JSON.stringify(body));
+    console.log('get next action request', JSON.stringify(body));
     const response = await fetch(
         runtime.getSetting('AGENT_ROUTER_URL') + '/plan',
         {
@@ -238,7 +257,10 @@ async function getNextAction(runtime: IAgentRuntime, taskRecord: any, chatHistor
         },
     );
     if (response.status !== 200) {
-        elizaLogger.error('Error in agent router response', await response.text());
+        elizaLogger.error(
+            'Error in agent router response',
+            await response.text(),
+        );
         throw new Error(`HTTP error! status: ${response.status}`);
     }
     return await response.json();
