@@ -92,8 +92,17 @@ export async function* handleUserMessage(
     );
     for (let stepCnt = 0; stepCnt < 5; stepCnt++) {
         let shouldReturn = false;
-        const actionDetail = await getNextAction(runtime, task_record, await getChatHistory(runtime, roomId));
-        console.log('get next action result', JSON.stringify(actionDetail));
+        const actionDetail = await getNextAction(
+            runtime,
+            task_record,
+            await getChatHistory(runtime, roomId),
+        );
+
+        if (actionDetail.action === 'GENERAL_CHAT') {
+            actionDetail.action = 'none';
+        }
+        console.log('received next action detail', actionDetail);
+        // save response to memory
         const agentRouterResponseMemory: Memory = {
             id: stringToUuid(Date.now().toString()),
             ...memory,
@@ -126,14 +135,21 @@ export async function* handleUserMessage(
                     return [memory];
                 }
             );
-            shouldReturn = actionsProcessResult.some((processResult) => processResult === false || processResult);
-            if (!shouldReturn && actionResponseMessage?.isError){
+            shouldReturn = actionsProcessResult.some(
+                (processResult) => processResult === false,
+            );
+
+            // GENERAL CHAT
+            if (actionDetail.action === 'none') {
                 shouldReturn = true;
             }
         }
         yield actionResponseMessage;
         task_record.pastActions.push({
-            action: actionDetail.action,
+            action:
+                actionDetail.action === 'none'
+                    ? 'WRAP_UP'
+                    : actionDetail.action,
             detail: actionDetail.explanation,
             result: actionResponseMessage?.result || actionResponseMessage?.text,
         });
