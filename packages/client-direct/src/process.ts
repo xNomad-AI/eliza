@@ -128,7 +128,7 @@ export async function* handleUserMessage(
                 }
             );
             shouldReturn = actionsProcessResult.some((processResult) => processResult === false || processResult);
-            if (!shouldReturn && actionResponseMessage.isError){
+            if (!shouldReturn && actionResponseMessage?.isError){
                 shouldReturn = true;
             }
             if (shouldReturn){

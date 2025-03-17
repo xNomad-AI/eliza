@@ -146,18 +146,9 @@ export class MongoDBDatabaseAdapter
                     );
 
                     if (!indexExists) {
-                        console.log(
-                            `Creating index for ${collectionName}:`,
-                            index.key,
-                        );
                         await collection.createIndex(
                             index.key,
                             index.options || {},
-                        );
-                    } else {
-                        console.log(
-                            `Index already exists for ${collectionName}:`,
-                            index.key,
                         );
                     }
                 }
@@ -224,9 +215,6 @@ export class MongoDBDatabaseAdapter
                     await this.createStandardEmbeddingIndexes();
                 }
             } else {
-                console.log(
-                    'Vector search not supported, using standard search',
-                );
                 this.isVectorSearchIndexComputable = false;
                 this.hasVectorSearch = false;
                 await this.createStandardEmbeddingIndexes();
@@ -249,7 +237,6 @@ export class MongoDBDatabaseAdapter
                     .collection(collection)
                     .createIndex({ embedding: 1 });
             }
-            console.log('Standard embedding indexes created successfully');
         } catch (error) {
             console.error(
                 'Failed to create standard embedding indexes:',
