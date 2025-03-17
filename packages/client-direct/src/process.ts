@@ -218,12 +218,15 @@ async function getNextAction(runtime: IAgentRuntime, taskRecord: any, chatHistor
     explanation: string;
 }>{
     // call agent router to get response
-    const body = {
+    const body : any = {
         chat_history: chatHistory,
         task_definition: taskRecord.taskDefinition,
         past_steps: taskRecord?.pastActions || [],
     };
     elizaLogger.log('get next action request', JSON.stringify(body));
+    body.actions = runtime.actions.map((action) => {
+        return action.functionCallSpec
+    });
     const response = await fetch(
         runtime.getSetting('AGENT_ROUTER_URL') + '/plan',
         {
