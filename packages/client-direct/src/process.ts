@@ -77,13 +77,12 @@ export async function getUserMessage(
     return memory;
 }
 
-export async function handleUserMessage(
+export async function* handleUserMessage(
     runtime: IAgentRuntime,
     memory: Memory,
 ) {
     const { roomId, agentId, userId, content } = memory;
     let state = await runtime.composeState(memory, {});
-    const responseMessages = [];
     const task_record = await getTaskRecord(
         runtime,
         content.text,
@@ -93,16 +92,8 @@ export async function handleUserMessage(
     );
     for (let stepCnt = 0; stepCnt < 5; stepCnt++) {
         let shouldReturn = false;
-        const actionDetail = await getNextAction(
-            runtime,
-            task_record,
-            await getChatHistory(runtime, roomId),
-        );
-        // if (actionDetail.action === 'GENERAL_CHAT') {
-        //     actionDetail.action = null;
-        // }
+        const actionDetail = await getNextAction(runtime, task_record, await getChatHistory(runtime, roomId));
         elizaLogger.log('received next action detail', actionDetail);
-        console.log('received next action detail', actionDetail);
         // save response to memory
         const agentRouterResponseMemory: Memory = {
             id: stringToUuid(Date.now().toString()),
@@ -116,12 +107,14 @@ export async function handleUserMessage(
 
         let actionResponseMessage = null as Content | null;
         if (actionDetail.action === 'WRAP_UP') {
-            actionResponseMessage = {
-                text: actionDetail.parameters.message,
-                action: actionDetail.action,
-            };
+            actionResponseMessage = { text: actionDetail.parameters.message, action: actionDetail.action };
             shouldReturn = true;
         } else {
+            yield {
+                text: actionDetail.parameters.message,
+                action: actionDetail.action,
+                parameters: actionDetail.parameters,
+            }
             const actionsProcessResult = await runtime.processActions(
                 memory,
                 [agentRouterResponseMemory],
@@ -132,21 +125,24 @@ export async function handleUserMessage(
                 async (actionResponse) => {
                     actionResponseMessage = actionResponse;
                     return [memory];
-                },
+                }
             );
-            shouldReturn = actionsProcessResult.some(
-                (processResult) => processResult === false,
-            );
+            shouldReturn = actionsProcessResult.some((processResult) => processResult === false || processResult);
+            if (!shouldReturn && actionResponseMessage.isError){
+                shouldReturn = true;
+            }
+            if (shouldReturn){
+                break;
+            }
         }
-        responseMessages.push(actionResponseMessage);
+        yield actionResponseMessage;
         task_record.pastActions.push({
             action: actionDetail.action,
             detail: actionDetail.explanation,
-            result:
-                actionResponseMessage?.result || actionResponseMessage?.text,
+            result: actionResponseMessage?.result || actionResponseMessage?.text,
         });
 
-        if (shouldReturn === true) {
+        if (shouldReturn) {
             const resMemory: Memory = {
                 id: stringToUuid(Date.now().toString()),
                 roomId,
@@ -162,7 +158,6 @@ export async function handleUserMessage(
         }
     }
     runtime.databaseAdapter.upsert?.('tasks', task_record);
-    return responseMessages;
 }
 
 async function getChatHistory(

@@ -218,9 +218,23 @@ export class DirectClient {
                     res.status(401).send('No accessToken provided');
                     return;
                 }
+
                 const userMessage = await getUserMessage(runtime, req);
-                const responseMessages = await handleUserMessage(runtime, userMessage);
-                res.json(responseMessages);
+                const handler = handleUserMessage(runtime, userMessage);
+                const isStream = req.body.stream == true;
+                if (isStream) {
+                    res.setHeader('Content-Type', 'application/octet-stream');
+                    for await (const message of handler) {
+                        res.write(JSON.stringify(message) + '\n');
+                    }
+                    res.end();
+                } else {
+                    const responseMessages = [];
+                    for await (const message of handler) {
+                        responseMessages.push(message);
+                    }
+                    res.json(responseMessages);
+                }
             },
         );
 
