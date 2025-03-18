@@ -96,7 +96,9 @@ export async function* handleUserMessage(
     for (let stepCnt = 0; stepCnt < 5; stepCnt++) {
         let shouldReturn = false;
         let actionResponseMessage = null as Content | null;
-
+        yield {
+            text: 'Detecting action'
+        }
         let actionDetail = await getNextAction(
             runtime,
             task_record,

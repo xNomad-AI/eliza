@@ -221,8 +221,8 @@ export class DirectClient {
 
                 const userMessage = await getUserMessage(runtime, req);
                 const handler = handleUserMessage(runtime, userMessage);
-                const isStream = req.body.stream == true;
-                if (isStream) {
+                const stream = req.body.stream == "true";
+                if (stream) {
                     res.setHeader('Content-Type', 'application/octet-stream');
                     for await (const message of handler) {
                         res.write(JSON.stringify(message) + '\n');
