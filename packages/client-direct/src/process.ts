@@ -83,14 +83,13 @@ export async function* handleUserMessage(
 ) {
     const { roomId, agentId, userId, content } = memory;
     let state = await runtime.composeState(memory, {});
-    const task_record = await getTaskRecord(
+    let task_record = await getTaskRecord(
         runtime,
         content.text,
         roomId,
         agentId,
         userId,
     );
-
     for (let stepCnt = 0; stepCnt < 5; stepCnt++) {
         let shouldReturn = false;
         let actionResponseMessage = null as Content | null;
@@ -274,8 +273,6 @@ async function getNextAction(
     body.actions = runtime.actions.map((action) => {
         return action.functionCallSpec;
     });
-    elizaLogger.log('get next action request', JSON.stringify(body));
-    console.log('get next action request', JSON.stringify(body));
     const response = await fetch(
         runtime.getSetting('AGENT_ROUTER_URL') + '/plan',
         {
