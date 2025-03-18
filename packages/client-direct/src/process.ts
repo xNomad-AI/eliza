@@ -90,6 +90,9 @@ export async function* handleUserMessage(
         agentId,
         userId,
     );
+    yield {
+        text: 'Connected'
+    }
     for (let stepCnt = 0; stepCnt < 5; stepCnt++) {
         let shouldReturn = false;
         let actionResponseMessage = null as Content | null;
@@ -137,10 +140,10 @@ export async function* handleUserMessage(
             actionResponseMessage = { text: actionDetail.parameters.message, action: actionDetail.action };
             shouldReturn = true;
         } else {
-            yield {
-                text: actionDetail.parameters.message,
-                action: actionDetail.action,
-                parameters: actionDetail.parameters,
+            if (actionDetail.action && !['wrap_up', 'none', 'general_chat'].includes(actionDetail.action.toLowerCase())){
+                yield {
+                    text: `Processing Action: ${actionDetail.action}`
+                }
             }
             const actionsProcessResult = await runtime.processActions(
                 memory,
@@ -155,7 +158,7 @@ export async function* handleUserMessage(
                 }
             );
             shouldReturn = actionsProcessResult.some(
-                (processResult) => processResult === false,
+                (processResult) => processResult != 'success',
             );
 
             // GENERAL CHAT
@@ -198,6 +201,7 @@ async function getChatHistory(
     {
         role: string;
         content: string;
+        attachment?: Media;
         idx: number;
     }[]
 > {
@@ -216,6 +220,7 @@ async function getChatHistory(
             return {
                 role,
                 content: msg.content.text || '',
+                attachments: msg.content.attachments,
                 idx: idx,
             };
         });

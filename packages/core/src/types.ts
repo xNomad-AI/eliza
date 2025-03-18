@@ -437,7 +437,7 @@ export type Validator = (
  */
 export interface Action {
     /** Similar action descriptions */
-    similes: string[];
+    similes?: string[];
 
     /** Detailed description */
     description: string;
@@ -1285,6 +1285,8 @@ export abstract class Service {
     abstract initialize(runtime: IAgentRuntime): Promise<void>;
 }
 
+export type ActionStatus = 'success' | 'failed' | 'pending' | 'cancelled' | 'rejected';
+
 export interface IAgentRuntime {
     // Properties
     agentId: UUID;
@@ -1338,7 +1340,8 @@ export interface IAgentRuntime {
         responses: Memory[],
         state?: State,
         callback?: HandlerCallback,
-    ): Promise<boolean[]>;
+    ): Promise< (boolean | ActionStatus) []>;
+
 
     evaluate(
         message: Memory,

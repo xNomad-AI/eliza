@@ -17,6 +17,7 @@ import {
 } from './evaluators.ts';
 import { generateText } from './generation.ts';
 import { formatGoalsAsString, getGoals } from './goals.ts';
+import { type ActionStatus } from './types.ts';
 import { elizaLogger } from './index.ts';
 import knowledge from './knowledge.ts';
 import { MemoryManager } from './memory.ts';
@@ -993,7 +994,7 @@ export class AgentRuntime implements IAgentRuntime {
         responses: Memory[],
         state?: State,
         callback?: HandlerCallback,
-    ): Promise<boolean[]> {
+    ): Promise<(boolean | ActionStatus) []> {
         let actionsProcessResult = [];
         for (const response of responses) {
             if (!response.content?.action) {
@@ -1019,38 +1020,10 @@ export class AgentRuntime implements IAgentRuntime {
             );
 
             if (!action) {
-                elizaLogger.info('Attempting to find action in similes.');
-                for (const _action of this.actions) {
-                    const simileAction = _action.similes.find(
-                        (simile) =>
-                            simile
-                                .toLowerCase()
-                                .replace('_', '')
-                                .includes(normalizedAction) ||
-                            normalizedAction.includes(
-                                simile.toLowerCase().replace('_', ''),
-                            ),
-                    );
-                    if (simileAction) {
-                        action = _action;
-                        elizaLogger.success(
-                            `Action found in similes: ${action.name}`,
-                        );
-                        break;
-                    }
-                }
-            }
-
-            if (!action) {
                 elizaLogger.error(
                     'No action found for',
                     response.content.action,
                 );
-                continue;
-            }
-
-            if (!action.handler) {
-                elizaLogger.error(`Action ${action.name} has no handler.`);
                 continue;
             }
 
@@ -1067,6 +1040,7 @@ export class AgentRuntime implements IAgentRuntime {
                     text: `An error occurred while executing the action: "${action.name}". Please try again later. If the issue persists, feel free to contact support for assistance.`,
                     isError: true,
                 });
+                actionsProcessResult.push('failed');
             }
         }
         return actionsProcessResult;
