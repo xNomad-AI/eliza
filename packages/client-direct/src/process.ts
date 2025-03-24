@@ -90,15 +90,18 @@ export async function* handleUserMessage(
         agentId,
         userId,
     );
+
+    const lastAction = task_record.pastActions.at(-1);
+
     yield {
-        text: 'Connected'
-    }
+        text: 'Connected',
+    };
     for (let stepCnt = 0; stepCnt < 5; stepCnt++) {
         let shouldReturn = false;
         let actionResponseMessage = null as Content | null;
         yield {
-            text: 'Detecting action'
-        }
+            text: 'Detecting action',
+        };
         let actionDetail = await getNextAction(
             runtime,
             task_record,
@@ -139,13 +142,21 @@ export async function* handleUserMessage(
         };
 
         if (actionDetail.action === 'WRAP_UP') {
-            actionResponseMessage = { text: actionDetail.parameters.message, action: actionDetail.action };
+            actionResponseMessage = {
+                text: actionDetail.parameters.message,
+                action: actionDetail.action,
+            };
             shouldReturn = true;
         } else {
-            if (actionDetail.action && !['wrap_up', 'none', 'general_chat'].includes(actionDetail.action.toLowerCase())){
+            if (
+                actionDetail.action &&
+                !['wrap_up', 'none', 'general_chat'].includes(
+                    actionDetail.action.toLowerCase(),
+                )
+            ) {
                 yield {
-                    text: `Processing Action: ${actionDetail.action}`
-                }
+                    text: `Processing Action: ${actionDetail.action}`,
+                };
             }
             const actionsProcessResult = await runtime.processActions(
                 memory,
@@ -153,11 +164,12 @@ export async function* handleUserMessage(
                 await runtime.composeState(memory, {
                     agentName: runtime.character.name,
                     actionParameters: actionDetail.parameters,
+                    lastAction: lastAction,
                 }),
                 async (actionResponse) => {
                     actionResponseMessage = actionResponse;
                     return [memory];
-                }
+                },
             );
             shouldReturn = actionsProcessResult.some(
                 (processResult) => processResult != 'success',
@@ -174,8 +186,10 @@ export async function* handleUserMessage(
                 actionDetail.action === 'none'
                     ? 'WRAP_UP'
                     : actionDetail.action,
+            parameters: actionDetail.parameters,
             detail: actionDetail.explanation,
-            result: actionResponseMessage?.result || actionResponseMessage?.text,
+            result:
+                actionResponseMessage?.result || actionResponseMessage?.text,
         });
         const resMemory: Memory = {
             id: stringToUuid(Date.now().toString()),
