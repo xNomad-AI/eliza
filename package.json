@@ -44,20 +44,14 @@
   },
   "pnpm": {
     "overrides": {
-      "onnxruntime-node": "1.20.1",
       "@solana/web3.js@1.95.5": "npm:@solana/web3.js@1.95.5",
       "@solana/web3.js@1.95.8": "npm:@solana/web3.js@1.95.8",
       "@solana/web3.js@2": "npm:@solana/web3.js@2.0.0",
       "viem": "2.21.58",
-      "@polkadot/util": "12.6.2",
-      "@polkadot/util-crypto": "12.6.2",
-      "@polkadot/types-create": "10.13.1",
-      "@polkadot/types-codec": "10.13.1",
-      "@polkadot/keyring": "12.6.2",
       "@ai-sdk/provider": "1.0.6",
       "@ai-sdk/provider-utils": "2.1.2",
       "cookie": "0.7.0",
-      "bs58": "5.0.0",
+      "bs58": "6.0.0",
       "@coral-xyz/anchor": "0.28.0"
     }
   },
@@ -65,19 +59,11 @@
     "node": "23.3.0"
   },
   "dependencies": {
-    "@0glabs/0g-ts-sdk": "0.2.1",
-    "@coinbase/coinbase-sdk": "0.10.0",
-    "@deepgram/sdk": "^3.9.0",
-    "@injectivelabs/sdk-ts": "^1.14.33",
     "@vitest/eslint-plugin": "1.0.1",
-    "amqplib": "0.10.5",
-    "bs58": "4.0.0",
-    "csv-parse": "5.6.0",
-    "langdetect": "^0.2.1",
+    "bs58": "6.0.0",
     "ollama-ai-provider": "0.16.1",
     "optional": "0.1.4",
-    "pnpm": "9.15.0",
-    "sharp": "0.33.5"
+    "pnpm": "9.15.0"
   },
   "packageManager": "pnpm@9.15.0",
   "workspaces": [
