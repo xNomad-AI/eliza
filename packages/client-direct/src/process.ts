@@ -91,7 +91,7 @@ export async function* handleUserMessage(
         userId,
     );
 
-    const lastAction = task_record.pastActions.at(-1);
+    
 
     yield {
         text: 'Connected',
@@ -99,6 +99,8 @@ export async function* handleUserMessage(
     for (let stepCnt = 0; stepCnt < 5; stepCnt++) {
         let shouldReturn = false;
         let actionResponseMessage = null as Content | null;
+        const lastAction = task_record.pastActions.at(-1);
+        
         yield {
             text: 'Detecting action',
         };
