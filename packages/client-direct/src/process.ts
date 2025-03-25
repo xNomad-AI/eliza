@@ -271,6 +271,7 @@ async function getNextAction(
 }> {
     // call agent router to get response
     const body: any = {
+        chain: runtime.getSetting('NFT_CHAIN'),
         chat_history: chatHistory,
         task_definition: taskRecord.taskDefinition,
         past_steps: taskRecord?.pastActions || [],
