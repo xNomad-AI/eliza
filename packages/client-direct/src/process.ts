@@ -100,7 +100,7 @@ export async function* handleUserMessage(
         let shouldReturn = false;
         let actionResponseMessage = null as Content | null;
         const lastAction = task_record.pastActions.at(-1);
-        
+
         yield {
             text: 'Detecting action',
         };
@@ -117,7 +117,7 @@ export async function* handleUserMessage(
                 agentId,
                 userId,
                 taskId: task_record.taskId + 1,
-                taskDefinition: actionDetail.parameters.newTaskDefinition,
+                taskDefinition: content.text,
                 pastActions: [],
             };
             actionDetail = await getNextAction(
