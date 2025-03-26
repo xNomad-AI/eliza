@@ -270,7 +270,7 @@ export class AgentRuntime implements IAgentRuntime {
             stringToUuid(opts.character?.name ?? uuidv4());
         this.character = opts.character || defaultCharacter;
 
-        elizaLogger.info(
+        elizaLogger.debug(
             `${this.character.name}(${this.agentId}) - Initializing AgentRuntime with options:`,
             {
                 character: opts.character?.name,

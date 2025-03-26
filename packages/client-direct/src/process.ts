@@ -11,6 +11,12 @@ import {
 import path from 'path';
 import express from 'express';
 
+enum DisplayType {
+    AGENT_STATUS = "AGENT_STATUS", // Agent status
+    AGENT_ACTION = "AGENT_ACTION", // Agent action
+    AGENT_RESPONSE = "AGENT_RESPONSE" // Agent response
+}
+
 export async function getUserMessage(
     runtime: IAgentRuntime,
     req: express.Request,
@@ -91,13 +97,17 @@ export async function* handleUserMessage(
         userId,
     );
     yield {
-        text: 'Connected'
+        text: 'Connected',
+        displayType: DisplayType.AGENT_STATUS
     }
     for (let stepCnt = 0; stepCnt < 5; stepCnt++) {
         let shouldReturn = false;
         let actionResponseMessage = null as Content | null;
-        yield {
-            text: 'Detecting action'
+        if (stepCnt === 0) {
+            yield {
+                text: 'Detecting action',
+                displayType: DisplayType.AGENT_STATUS
+            }
         }
         let actionDetail = await getNextAction(
             runtime,
@@ -144,7 +154,8 @@ export async function* handleUserMessage(
         } else {
             if (actionDetail.action && !['wrap_up', 'none', 'general_chat'].includes(actionDetail.action.toLowerCase())){
                 yield {
-                    text: `Processing Action: ${actionDetail.action}`
+                    text: `Processing Action: ${actionDetail.action}`,
+                    displayType: DisplayType.AGENT_ACTION
                 }
             }
             const actionsProcessResult = await runtime.processActions(
@@ -168,7 +179,10 @@ export async function* handleUserMessage(
                 shouldReturn = true;
             }
         }
-        yield actionResponseMessage;
+        yield {
+            text: actionResponseMessage?.text,
+            displayType: DisplayType.AGENT_RESPONSE
+        };
         task_record.pastActions.push({
             action:
                 actionDetail.action === 'none'
