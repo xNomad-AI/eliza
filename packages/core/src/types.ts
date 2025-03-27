@@ -1155,6 +1155,7 @@ export interface IDatabaseAdapter {
     find?(tableName: string, filter: any, options?: any): Promise<any[]>;
     upsert?(tableName: string, record: any): Promise<void>;
     query?(tableName: string, query: any): Promise<any[]>;
+    delete?(tableName: string, filter: any): Promise<void>;
     queryLatestTask?(tableName: string, query: any): Promise<any[]>;
 }
 

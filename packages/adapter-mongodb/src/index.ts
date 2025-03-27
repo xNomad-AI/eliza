@@ -1680,4 +1680,9 @@ export class MongoDBDatabaseAdapter
             return [];
         }
     }
+
+    async delete(tableName: string, filter: any) {
+        await this.ensureConnection();
+        await this.database.collection(tableName).deleteMany(filter);
+    }
 }
