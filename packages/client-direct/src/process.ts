@@ -180,7 +180,7 @@ export async function* handleUserMessage(
             }
         }
         yield {
-            text: actionResponseMessage?.text,
+            ...actionResponseMessage,
             displayType: DisplayType.AGENT_RESPONSE
         };
         task_record.pastActions.push({
