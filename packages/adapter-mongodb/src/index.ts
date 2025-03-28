@@ -253,11 +253,11 @@ export class MongoDBDatabaseAdapter
         try {
             await this.db.connect();
             this.database = this.db.db(this.databaseName);
-
-            await this.initializeCollections();
-            await this.initializeStandardIndexes();
-            await this.initializeVectorSearch();
-
+            if (process.env.INIT_AGENT_DB){
+                await this.initializeCollections();
+                await this.initializeStandardIndexes();
+                await this.initializeVectorSearch();
+            }
             // try {
             //     // Enable sharding for better performance
             //     // await this.database.command({
