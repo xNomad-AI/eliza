@@ -218,10 +218,9 @@ export class DirectClient {
                     res.status(401).send('No accessToken provided');
                     return;
                 }
-
-                const userMessage = await getUserMessage(runtime, req);
-                const handler = handleUserMessage(runtime, userMessage);
                 const stream = req.body.stream == "true";
+                const userMessage = await getUserMessage(runtime, req);
+                const handler = handleUserMessage(runtime, userMessage, stream);
                 if (stream) {
                     res.setHeader('Content-Type', 'application/octet-stream');
                     for await (const message of handler) {

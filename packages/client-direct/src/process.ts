@@ -86,6 +86,7 @@ export async function getUserMessage(
 export async function* handleUserMessage(
     runtime: IAgentRuntime,
     memory: Memory,
+    stream: boolean = false,
 ) {
     const { roomId, agentId, userId, content } = memory;
     let state = await runtime.composeState(memory, {});
@@ -100,10 +101,10 @@ export async function* handleUserMessage(
         text: 'Connected',
         displayType: DisplayType.AGENT_STATUS
     }
-    for (let stepCnt = 0; stepCnt < 5; stepCnt++) {
+    for (let stepCnt = 0; stepCnt < 1; stepCnt++) {
         let shouldReturn = false;
         let actionResponseMessage = null as Content | null;
-        if (stepCnt === 0) {
+        if (stepCnt === 0 && stream) {
             yield {
                 text: 'Detecting action',
                 displayType: DisplayType.AGENT_STATUS
@@ -152,7 +153,7 @@ export async function* handleUserMessage(
             actionResponseMessage = { text: actionDetail.parameters.message, action: actionDetail.action };
             shouldReturn = true;
         } else {
-            if (actionDetail.action && !['wrap_up', 'none', 'general_chat'].includes(actionDetail.action.toLowerCase())){
+            if (stream && actionDetail.action && !['wrap_up', 'none', 'general_chat'].includes(actionDetail.action.toLowerCase())){
                 yield {
                     text: `Processing Action: ${actionDetail.action}`,
                     displayType: DisplayType.AGENT_ACTION
