@@ -97,9 +97,11 @@ export async function* handleUserMessage(
         agentId,
         userId,
     );
-    yield {
-        text: 'Connected',
-        displayType: DisplayType.AGENT_STATUS
+    if (stream){
+        yield {
+            text: 'Connected',
+            displayType: DisplayType.AGENT_STATUS
+        }
     }
     for (let stepCnt = 0; stepCnt < 1; stepCnt++) {
         let shouldReturn = false;
