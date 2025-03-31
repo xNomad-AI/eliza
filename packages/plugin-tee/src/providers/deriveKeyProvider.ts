@@ -154,6 +154,7 @@ class DeriveKeyProvider {
     ): Promise<{
         keypair: PrivateKeyAccount;
         attestation: RemoteAttestationQuote;
+        privateKey: string;
     }> {
         try {
             if (!path || !subject) {
@@ -175,7 +176,7 @@ class DeriveKeyProvider {
             );
             elizaLogger.log("ECDSA Key Derived Successfully!");
 
-            return { keypair, attestation };
+            return { keypair, attestation, privateKey: hex };
         } catch (error) {
             elizaLogger.error("Error deriving ecdsa key:", error);
             throw error;

@@ -1,31 +1,32 @@
-import { readFile } from "fs/promises";
-import { join } from "path";
-import { names, uniqueNamesGenerator } from "unique-names-generator";
-import { v4 as uuidv4 } from "uuid";
+import { readFile } from 'fs/promises';
+import { join } from 'path';
+import { names, uniqueNamesGenerator } from 'unique-names-generator';
+import { v4 as uuidv4 } from 'uuid';
 import {
     composeActionExamples,
     formatActionNames,
     formatActions,
-} from "./actions.ts";
-import { addHeader, composeContext } from "./context.ts";
-import { defaultCharacter } from "./defaultCharacter.ts";
+} from './actions.ts';
+import { addHeader, composeContext } from './context.ts';
+import { defaultCharacter } from './defaultCharacter.ts';
 import {
     evaluationTemplate,
     formatEvaluatorExamples,
     formatEvaluatorNames,
     formatEvaluators,
-} from "./evaluators.ts";
-import { generateText } from "./generation.ts";
-import { formatGoalsAsString, getGoals } from "./goals.ts";
-import { elizaLogger } from "./index.ts";
-import knowledge from "./knowledge.ts";
-import { MemoryManager } from "./memory.ts";
-import { formatActors, formatMessages, getActorDetails } from "./messages.ts";
-import { parseJsonArrayFromText } from "./parsing.ts";
-import { formatPosts } from "./posts.ts";
-import { getProviders } from "./providers.ts";
-import { RAGKnowledgeManager } from "./ragknowledge.ts";
-import settings from "./settings.ts";
+} from './evaluators.ts';
+import { generateText } from './generation.ts';
+import { formatGoalsAsString, getGoals } from './goals.ts';
+import { type ActionStatus } from './types.ts';
+import { elizaLogger } from './index.ts';
+import knowledge from './knowledge.ts';
+import { MemoryManager } from './memory.ts';
+import { formatActors, formatMessages, getActorDetails } from './messages.ts';
+import { parseJsonArrayFromText } from './parsing.ts';
+import { formatPosts } from './posts.ts';
+import { getProviders } from './providers.ts';
+import { RAGKnowledgeManager } from './ragknowledge.ts';
+import settings from './settings.ts';
 import {
     type Character,
     type Goal,
@@ -52,10 +53,10 @@ import {
     type Evaluator,
     type Memory,
     type DirectoryItem,
-} from "./types.ts";
-import { stringToUuid } from "./uuid.ts";
-import { glob } from "glob";
-import { existsSync } from "fs";
+} from './types.ts';
+import { stringToUuid } from './uuid.ts';
+import { glob } from 'glob';
+import { existsSync } from 'fs';
 /**
  * Represents the runtime environment for an agent, handling message processing,
  * action registration, and interaction with external services like OpenAI and Supabase.
@@ -63,10 +64,10 @@ import { existsSync } from "fs";
 
 function isDirectoryItem(item: any): item is DirectoryItem {
     return (
-        typeof item === "object" &&
+        typeof item === 'object' &&
         item !== null &&
-        "directory" in item &&
-        typeof item.directory === "string"
+        'directory' in item &&
+        typeof item.directory === 'string'
     );
 }
 
@@ -83,7 +84,7 @@ export class AgentRuntime implements IAgentRuntime {
     /**
      * The base URL of the server where the agent's requests are processed.
      */
-    serverUrl = "http://localhost:7998";
+    serverUrl = 'http://localhost:7998';
 
     /**
      * The database adapter used for interacting with the database.
@@ -176,7 +177,7 @@ export class AgentRuntime implements IAgentRuntime {
 
     registerMemoryManager(manager: IMemoryManager): void {
         if (!manager.tableName) {
-            throw new Error("Memory manager must have a tableName");
+            throw new Error('Memory manager must have a tableName');
         }
 
         if (this.memoryManagers.has(manager.tableName)) {
@@ -204,18 +205,23 @@ export class AgentRuntime implements IAgentRuntime {
 
     async registerService(service: Service): Promise<void> {
         const serviceType = service.serviceType;
-        elizaLogger.log(`${this.character.name}(${this.agentId}) - Registering service:`, serviceType);
+        elizaLogger.log(
+            `${this.character.name}(${this.agentId}) - Registering service:`,
+            serviceType,
+        );
 
         if (this.services.has(serviceType)) {
             elizaLogger.warn(
-                `${this.character.name}(${this.agentId}) - Service ${serviceType} is already registered. Skipping registration.`
+                `${this.character.name}(${this.agentId}) - Service ${serviceType} is already registered. Skipping registration.`,
             );
             return;
         }
 
         // Add the service to the services map
         this.services.set(serviceType, service);
-        elizaLogger.success(`${this.character.name}(${this.agentId}) - Service ${serviceType} registered successfully`);
+        elizaLogger.success(
+            `${this.character.name}(${this.agentId}) - Service ${serviceType} registered successfully`,
+        );
     }
 
     /**
@@ -264,22 +270,25 @@ export class AgentRuntime implements IAgentRuntime {
             stringToUuid(opts.character?.name ?? uuidv4());
         this.character = opts.character || defaultCharacter;
 
-        elizaLogger.info(`${this.character.name}(${this.agentId}) - Initializing AgentRuntime with options:`, {
-            character: opts.character?.name,
-            modelProvider: opts.modelProvider,
-            characterModelProvider: opts.character?.modelProvider,
-        });
-
         elizaLogger.debug(
+            `${this.character.name}(${this.agentId}) - Initializing AgentRuntime with options:`,
+            {
+                character: opts.character?.name,
+                modelProvider: opts.modelProvider,
+                characterModelProvider: opts.character?.modelProvider,
+            },
+        );
+
+        elizaLogger.success(
             `[AgentRuntime] Process working directory: ${process.cwd()}`,
         );
 
         // Define the root path once
         this.knowledgeRoot = join(
             process.cwd(),
-            "..",
-            "characters",
-            "knowledge",
+            '..',
+            'characters',
+            'knowledge',
         );
 
         elizaLogger.debug(
@@ -290,7 +299,7 @@ export class AgentRuntime implements IAgentRuntime {
             opts.conversationLength ?? this.#conversationLength;
 
         if (!opts.databaseAdapter) {
-            throw new Error("No database adapter provided");
+            throw new Error('No database adapter provided');
         }
         this.databaseAdapter = opts.databaseAdapter;
 
@@ -314,32 +323,32 @@ export class AgentRuntime implements IAgentRuntime {
 
         this.messageManager = new MemoryManager({
             runtime: this,
-            tableName: "messages",
+            tableName: 'messages',
         });
 
         this.descriptionManager = new MemoryManager({
             runtime: this,
-            tableName: "descriptions",
+            tableName: 'descriptions',
         });
 
         this.loreManager = new MemoryManager({
             runtime: this,
-            tableName: "lore",
+            tableName: 'lore',
         });
 
         this.documentsManager = new MemoryManager({
             runtime: this,
-            tableName: "documents",
+            tableName: 'documents',
         });
 
         this.knowledgeManager = new MemoryManager({
             runtime: this,
-            tableName: "fragments",
+            tableName: 'fragments',
         });
 
         this.ragKnowledgeManager = new RAGKnowledgeManager({
             runtime: this,
-            tableName: "knowledge",
+            tableName: 'knowledge',
             knowledgeRoot: this.knowledgeRoot,
         });
 
@@ -353,15 +362,18 @@ export class AgentRuntime implements IAgentRuntime {
 
         this.serverUrl = opts.serverUrl ?? this.serverUrl;
 
-        elizaLogger.success(`${this.character.name}(${this.agentId}) - Setting Model Provider:`, {
-            characterModelProvider: this.character.modelProvider,
-            optsModelProvider: opts.modelProvider,
-            currentModelProvider: this.modelProvider,
-            finalSelection:
-                this.character.modelProvider ??
-                opts.modelProvider ??
-                this.modelProvider,
-        });
+        elizaLogger.success(
+            `${this.character.name}(${this.agentId}) - Setting Model Provider:`,
+            {
+                characterModelProvider: this.character.modelProvider,
+                optsModelProvider: opts.modelProvider,
+                currentModelProvider: this.modelProvider,
+                finalSelection:
+                    this.character.modelProvider ??
+                    opts.modelProvider ??
+                    this.modelProvider,
+            },
+        );
 
         this.modelProvider =
             this.character.modelProvider ??
@@ -370,37 +382,22 @@ export class AgentRuntime implements IAgentRuntime {
 
         this.imageModelProvider =
             this.character.imageModelProvider ?? this.modelProvider;
-        
+
         this.imageVisionModelProvider =
             this.character.imageVisionModelProvider ?? this.modelProvider;
-            
-        elizaLogger.info(
-          `${this.character.name}(${this.agentId}) - Selected model provider:`,
-          this.modelProvider
-        );
-
-        elizaLogger.debug(
-          `${this.character.name}(${this.agentId}) - Selected image model provider:`,
-          this.imageModelProvider
-        );
-
-        elizaLogger.debug(
-            `${this.character.name}(${this.agentId}) - Selected image vision model provider:`,
-            this.imageVisionModelProvider
-        );
 
         // Validate model provider
         if (!Object.values(ModelProviderName).includes(this.modelProvider)) {
-            elizaLogger.error("Invalid model provider:", this.modelProvider);
+            elizaLogger.error('Invalid model provider:', this.modelProvider);
             elizaLogger.error(
-                "Available providers:",
+                'Available providers:',
                 Object.values(ModelProviderName),
             );
             throw new Error(`Invalid model provider: ${this.modelProvider}`);
         }
 
         if (!this.serverUrl) {
-            elizaLogger.warn("No serverUrl provided, defaulting to localhost");
+            elizaLogger.warn('No serverUrl provided, defaulting to localhost');
         }
 
         this.token = opts.token;
@@ -449,12 +446,12 @@ export class AgentRuntime implements IAgentRuntime {
                 await service.initialize(this);
                 this.services.set(serviceType, service);
                 elizaLogger.success(
-                    `${this.character.name}(${this.agentId}) - Service ${serviceType} initialized successfully`
+                    `${this.character.name}(${this.agentId}) - Service ${serviceType} initialized successfully`,
                 );
             } catch (error) {
                 elizaLogger.error(
                     `${this.character.name}(${this.agentId}) - Failed to initialize service ${serviceType}:`,
-                    error
+                    error,
                 );
                 throw error;
             }
@@ -488,19 +485,19 @@ export class AgentRuntime implements IAgentRuntime {
                 const [directoryKnowledge, pathKnowledge, stringKnowledge] =
                     this.character.knowledge.reduce(
                         (acc, item) => {
-                            if (typeof item === "object") {
+                            if (typeof item === 'object') {
                                 if (isDirectoryItem(item)) {
                                     elizaLogger.debug(
                                         `[RAG Filter] Found directory item: ${JSON.stringify(item)}`,
                                     );
                                     acc[0].push(item);
-                                } else if ("path" in item) {
+                                } else if ('path' in item) {
                                     elizaLogger.debug(
                                         `[RAG Filter] Found path item: ${JSON.stringify(item)}`,
                                     );
                                     acc[1].push(item);
                                 }
-                            } else if (typeof item === "string") {
+                            } else if (typeof item === 'string') {
                                 elizaLogger.debug(
                                     `[RAG Filter] Found string item: ${item.slice(0, 100)}...`,
                                 );
@@ -548,7 +545,7 @@ export class AgentRuntime implements IAgentRuntime {
             } else {
                 // Non-RAG mode: only process string knowledge
                 const stringKnowledge = this.character.knowledge.filter(
-                    (item): item is string => typeof item === "string",
+                    (item): item is string => typeof item === 'string',
                 );
                 await this.processCharacterKnowledge(stringKnowledge);
             }
@@ -563,7 +560,7 @@ export class AgentRuntime implements IAgentRuntime {
     }
 
     async stop() {
-        elizaLogger.debug("runtime::stop - character", this.character.name);
+        elizaLogger.debug('runtime::stop - character', this.character.name);
         // stop services, they don't have a stop function
         // just initialize
 
@@ -575,9 +572,9 @@ export class AgentRuntime implements IAgentRuntime {
         for (const cStr in this.clients) {
             const c = this.clients[cStr];
             elizaLogger.log(
-                "runtime::stop - requesting",
+                'runtime::stop - requesting',
                 cStr,
-                "client stop for",
+                'client stop for',
                 this.character.name,
             );
             c.stop();
@@ -601,10 +598,10 @@ export class AgentRuntime implements IAgentRuntime {
                 continue;
             }
 
-            elizaLogger.info(
-                "Processing knowledge for ",
+            elizaLogger.success(
+                'Processing knowledge for ',
                 this.character.name,
-                " - ",
+                ' - ',
                 item.slice(0, 100),
             );
 
@@ -637,7 +634,7 @@ export class AgentRuntime implements IAgentRuntime {
                 let contentItem = item;
 
                 // Only treat as shared if explicitly marked
-                if (typeof item === "object" && "path" in item) {
+                if (typeof item === 'object' && 'path' in item) {
                     isShared = item.shared === true;
                     contentItem = item.path;
                 } else {
@@ -650,19 +647,19 @@ export class AgentRuntime implements IAgentRuntime {
                     isShared,
                 );
                 const fileExtension = contentItem
-                    .split(".")
+                    .split('.')
                     .pop()
                     ?.toLowerCase();
 
                 // Check if it's a file or direct knowledge
                 if (
                     fileExtension &&
-                    ["md", "txt", "pdf"].includes(fileExtension)
+                    ['md', 'txt', 'pdf'].includes(fileExtension)
                 ) {
                     try {
                         const filePath = join(this.knowledgeRoot, contentItem);
                         // Get existing knowledge first with more detailed logging
-                        elizaLogger.debug("[RAG Query]", {
+                        elizaLogger.debug('[RAG Query]', {
                             knowledgeId,
                             agentId: this.agentId,
                             relativePath: contentItem,
@@ -678,7 +675,7 @@ export class AgentRuntime implements IAgentRuntime {
                                 agentId: this.agentId, // Keep agentId as it's used in OR query
                             });
 
-                        elizaLogger.debug("[RAG Query Result]", {
+                        elizaLogger.debug('[RAG Query Result]', {
                             relativePath: contentItem,
                             fullPath: filePath,
                             knowledgeId,
@@ -697,14 +694,14 @@ export class AgentRuntime implements IAgentRuntime {
                             results: existingKnowledge.map((k) => ({
                                 id: k.id,
                                 agentId: k.agentId,
-                                isBaseKnowledge: !k.id.includes("chunk"),
+                                isBaseKnowledge: !k.id.includes('chunk'),
                             })),
                         });
 
                         // Read file content
                         const content: string = await readFile(
                             filePath,
-                            "utf8",
+                            'utf8',
                         );
                         if (!content) {
                             hasError = true;
@@ -715,7 +712,7 @@ export class AgentRuntime implements IAgentRuntime {
                             const existingContent =
                                 existingKnowledge[0].content.text;
 
-                            elizaLogger.debug("[RAG Compare]", {
+                            elizaLogger.debug('[RAG Compare]', {
                                 path: contentItem,
                                 knowledgeId,
                                 isShared,
@@ -731,14 +728,14 @@ export class AgentRuntime implements IAgentRuntime {
 
                             if (existingContent === content) {
                                 elizaLogger.info(
-                                    `${isShared ? "Shared knowledge" : "Knowledge"} ${contentItem} unchanged, skipping`,
+                                    `${isShared ? 'Shared knowledge' : 'Knowledge'} ${contentItem} unchanged, skipping`,
                                 );
                                 continue;
                             }
 
                             // Content changed, remove old knowledge before adding new
                             elizaLogger.info(
-                                `${isShared ? "Shared knowledge" : "Knowledge"} ${contentItem} changed, updating...`,
+                                `${isShared ? 'Shared knowledge' : 'Knowledge'} ${contentItem} changed, updating...`,
                             );
                             await this.ragKnowledgeManager.removeKnowledge(
                                 knowledgeId,
@@ -751,30 +748,30 @@ export class AgentRuntime implements IAgentRuntime {
                         elizaLogger.info(
                             `Processing ${fileExtension.toUpperCase()} file content for`,
                             this.character.name,
-                            "-",
+                            '-',
                             contentItem,
                         );
 
                         await this.ragKnowledgeManager.processFile({
                             path: contentItem,
                             content: content,
-                            type: fileExtension as "pdf" | "md" | "txt",
+                            type: fileExtension as 'pdf' | 'md' | 'txt',
                             isShared: isShared,
                         });
                     } catch (error: any) {
                         hasError = true;
                         elizaLogger.error(
                             `Failed to read knowledge file ${contentItem}. Error details:`,
-                            error?.message || error || "Unknown error",
+                            error?.message || error || 'Unknown error',
                         );
                         continue;
                     }
                 } else {
                     // Handle direct knowledge string
                     elizaLogger.info(
-                        "Processing direct knowledge for",
+                        'Processing direct knowledge for',
                         this.character.name,
-                        "-",
+                        '-',
                         contentItem.slice(0, 100),
                     );
 
@@ -797,7 +794,7 @@ export class AgentRuntime implements IAgentRuntime {
                         content: {
                             text: contentItem,
                             metadata: {
-                                type: "direct",
+                                type: 'direct',
                             },
                         },
                     });
@@ -806,7 +803,7 @@ export class AgentRuntime implements IAgentRuntime {
                 hasError = true;
                 elizaLogger.error(
                     `Error processing knowledge item ${item}:`,
-                    error?.message || error || "Unknown error",
+                    error?.message || error || 'Unknown error',
                 );
                 continue;
             }
@@ -814,7 +811,7 @@ export class AgentRuntime implements IAgentRuntime {
 
         if (hasError) {
             elizaLogger.warn(
-                "Some knowledge items failed to process, but continuing with available knowledge",
+                'Some knowledge items failed to process, but continuing with available knowledge',
             );
         }
     }
@@ -828,12 +825,12 @@ export class AgentRuntime implements IAgentRuntime {
         shared?: boolean;
     }) {
         if (!dirConfig.directory) {
-            elizaLogger.error("[RAG Directory] No directory specified");
+            elizaLogger.error('[RAG Directory] No directory specified');
             return;
         }
 
         // Sanitize directory path to prevent traversal attacks
-        const sanitizedDir = dirConfig.directory.replace(/\.\./g, "");
+        const sanitizedDir = dirConfig.directory.replace(/\.\./g, '');
         const dirPath = join(this.knowledgeRoot, sanitizedDir);
 
         try {
@@ -848,7 +845,7 @@ export class AgentRuntime implements IAgentRuntime {
 
             elizaLogger.debug(`[RAG Directory] Searching in: ${dirPath}`);
             // Use glob to find all matching files in directory
-            const files = await glob("**/*.{md,txt,pdf}", {
+            const files = await glob('**/*.{md,txt,pdf}', {
                 cwd: dirPath,
                 nodir: true,
                 absolute: false,
@@ -959,8 +956,16 @@ export class AgentRuntime implements IAgentRuntime {
      * @param action The action to register.
      */
     registerAction(action: Action) {
-        elizaLogger.success(`${this.character.name}(${this.agentId}) - Registering action: ${action.name}`);
+        elizaLogger.success(
+            `${this.character.name}(${this.agentId}) - Registering action: ${action.name}`,
+        );
         this.actions.push(action);
+        if (action.functionCallSpec) {
+            this.character.system =
+                this.character.system ||
+                `You have the following actions available for interaction, extract action parameters from the conversation when required paramters are ready `;
+            this.character.system += `\n\n${formatActionSystemPrompt(action)}`;
+        }
     }
 
     /**
@@ -989,16 +994,17 @@ export class AgentRuntime implements IAgentRuntime {
         responses: Memory[],
         state?: State,
         callback?: HandlerCallback,
-    ): Promise<void> {
+    ): Promise<(boolean | ActionStatus) []> {
+        let actionsProcessResult = [];
         for (const response of responses) {
             if (!response.content?.action) {
-                elizaLogger.warn("No action found in the response content.");
+                elizaLogger.warn('No action found in the response content.');
                 continue;
             }
 
             const normalizedAction = response.content.action
                 .toLowerCase()
-                .replace("_", "");
+                .replace('_', '');
 
             elizaLogger.info(`Normalized action: ${normalizedAction}`);
 
@@ -1006,46 +1012,18 @@ export class AgentRuntime implements IAgentRuntime {
                 (a: { name: string }) =>
                     a.name
                         .toLowerCase()
-                        .replace("_", "")
+                        .replace('_', '')
                         .includes(normalizedAction) ||
                     normalizedAction.includes(
-                        a.name.toLowerCase().replace("_", ""),
+                        a.name.toLowerCase().replace('_', ''),
                     ),
             );
 
             if (!action) {
-                elizaLogger.info("Attempting to find action in similes.");
-                for (const _action of this.actions) {
-                    const simileAction = _action.similes.find(
-                        (simile) =>
-                            simile
-                                .toLowerCase()
-                                .replace("_", "")
-                                .includes(normalizedAction) ||
-                            normalizedAction.includes(
-                                simile.toLowerCase().replace("_", ""),
-                            ),
-                    );
-                    if (simileAction) {
-                        action = _action;
-                        elizaLogger.success(
-                            `Action found in similes: ${action.name}`,
-                        );
-                        break;
-                    }
-                }
-            }
-
-            if (!action) {
                 elizaLogger.error(
-                    "No action found for",
+                    'No action found for',
                     response.content.action,
                 );
-                continue;
-            }
-
-            if (!action.handler) {
-                elizaLogger.error(`Action ${action.name} has no handler.`);
                 continue;
             }
 
@@ -1053,11 +1031,19 @@ export class AgentRuntime implements IAgentRuntime {
                 elizaLogger.info(
                     `Executing handler for action: ${action.name}`,
                 );
-                await action.handler(this, message, state, {}, callback);
+                actionsProcessResult.push(
+                    await action.handler(this, message, state, {}, callback),
+                );
             } catch (error) {
                 elizaLogger.error(error);
+                callback({
+                    text: `An error occurred while executing the action: "${action.name}". Please try again later. If the issue persists, feel free to contact support for assistance.`,
+                    isError: true,
+                });
+                actionsProcessResult.push('failed');
             }
         }
+        return actionsProcessResult;
     }
 
     /**
@@ -1076,7 +1062,7 @@ export class AgentRuntime implements IAgentRuntime {
     ) {
         const evaluatorPromises = this.evaluators.map(
             async (evaluator: Evaluator) => {
-                elizaLogger.log("Evaluating", evaluator.name);
+                elizaLogger.log('Evaluating', evaluator.name);
                 if (!evaluator.handler) {
                     return null;
                 }
@@ -1165,10 +1151,10 @@ export class AgentRuntime implements IAgentRuntime {
         if (!account) {
             await this.databaseAdapter.createAccount({
                 id: userId,
-                name: name || this.character.name || "Unknown User",
-                username: userName || this.character.username || "Unknown",
+                name: name || this.character.name || 'Unknown User',
+                username: userName || this.character.username || 'Unknown',
                 email: email || this.character.email || userId, // Temporary
-                details: this.character || { summary: "" },
+                details: this.character || { summary: '' },
             });
             elizaLogger.success(`User ${userName} created successfully.`);
         }
@@ -1201,14 +1187,14 @@ export class AgentRuntime implements IAgentRuntime {
         await Promise.all([
             this.ensureUserExists(
                 this.agentId,
-                this.character.username ?? "Agent",
-                this.character.name ?? "Agent",
+                this.character.username ?? 'Agent',
+                this.character.name ?? 'Agent',
                 source,
             ),
             this.ensureUserExists(
                 userId,
-                userName ?? "User" + userId,
-                userScreenName ?? "User" + userId,
+                userName ?? 'User' + userId,
+                userScreenName ?? 'User' + userId,
                 source,
             ),
             this.ensureRoomExists(roomId),
@@ -1246,29 +1232,21 @@ export class AgentRuntime implements IAgentRuntime {
     ) {
         const { userId, roomId } = message;
         let conversationLength = this.getConversationLength();
-        if (additionalKeys?.['conversationLength'] && typeof additionalKeys['conversationLength'] === 'number') {
+        if (
+            additionalKeys?.['conversationLength'] &&
+            typeof additionalKeys['conversationLength'] === 'number'
+        ) {
             conversationLength = additionalKeys['conversationLength'] as number;
         }
-        const [actorsData, recentMessagesData]: [
-            Actor[],
-            Memory[],
-            // Goal[],
-        ] = await Promise.all([
-            getActorDetails({ runtime: this, roomId }),
-            this.messageManager.getMemories({
-                roomId,
-                count: conversationLength,
-                unique: false,
-            }),
-            // getGoals({
-            //     runtime: this,
-            //     count: 10,
-            //     onlyInProgress: false,
-            //     roomId,
-            // }),
-        ]);
-
-        // const goals = formatGoalsAsString({ goals: goalsData });
+        const [actorsData, recentMessagesData]: [Actor[], Memory[]] =
+            await Promise.all([
+                getActorDetails({ runtime: this, roomId }),
+                this.messageManager.getMemories({
+                    roomId,
+                    count: conversationLength,
+                    unique: false,
+                }),
+            ]);
 
         const actors = formatActors({ actors: actorsData ?? [] });
 
@@ -1282,8 +1260,6 @@ export class AgentRuntime implements IAgentRuntime {
             actors: actorsData,
             conversationHeader: false,
         });
-
-        // const lore = formatLore(loreData);
 
         const senderName = actorsData?.find(
             (actor: Actor) => actor.id === userId,
@@ -1315,7 +1291,7 @@ export class AgentRuntime implements IAgentRuntime {
                     const attachments = msg.content.attachments || [];
                     if (!isWithinTime) {
                         attachments.forEach((attachment) => {
-                            attachment.text = "[Hidden]";
+                            attachment.text = '[Hidden]';
                         });
                     }
                     return attachments;
@@ -1334,158 +1310,61 @@ Description: ${attachment.description}
 Text: ${attachment.text}
   `,
             )
-            .join("\n");
+            .join('\n');
 
         // randomly get 3 bits of lore and join them into a paragraph, divided by \n
-        let lore = "";
+        let lore = '';
         // Assuming this.lore is an array of lore bits
         if (this.character.lore && this.character.lore.length > 0) {
             const shuffledLore = [...this.character.lore].sort(
                 () => Math.random() - 0.5,
             );
             const selectedLore = shuffledLore.slice(0, 10);
-            lore = selectedLore.join("\n");
+            lore = selectedLore.join('\n');
         }
 
         let formattedCharacterPostExamples = '';
-        // if (Array.isArray(this.character.postExamples)){
-        //     formattedCharacterPostExamples = (this.character.postExamples
-        //         ?.sort(() => 0.5 - Math.random())
-        //         .map((post) => {
-        //             const messageString = `${post}`;
-        //             return messageString;
-        //         })
-        //         .slice(0, 50)
-        //         .join("\n")) || '';
-        // }
-
         let formattedCharacterMessageExamples = '';
-        if (Array.isArray(this.character.messageExamples)){
-            formattedCharacterMessageExamples = (this.character.messageExamples
-                ?.sort(() => 0.5 - Math.random())
-                .map((example) => {
-                    const exampleNames = Array.from({ length: 5 }, () =>
-                        uniqueNamesGenerator({ dictionaries: [names] }),
-                    );
+        if (Array.isArray(this.character.messageExamples)) {
+            formattedCharacterMessageExamples =
+                this.character.messageExamples
+                    ?.sort(() => 0.5 - Math.random())
+                    .map((example) => {
+                        const exampleNames = Array.from({ length: 5 }, () =>
+                            uniqueNamesGenerator({ dictionaries: [names] }),
+                        );
 
-                    return example
-                        .map((message) => {
-                            let messageString = `${message.user}: ${message.content.text}`;
-                            exampleNames.forEach((name, index) => {
-                                const placeholder = `{{user${index + 1}}}`;
-                                messageString = messageString.replaceAll(
-                                    placeholder,
-                                    name,
-                                );
-                            });
-                            return messageString;
-                        })
-                        .join("\n");
-                })
-                .join("\n\n")) || '';
+                        return example
+                            .map((message) => {
+                                let messageString = `${message.user}: ${message.content.text}`;
+                                exampleNames.forEach((name, index) => {
+                                    const placeholder = `{{user${index + 1}}}`;
+                                    messageString = messageString.replaceAll(
+                                        placeholder,
+                                        name,
+                                    );
+                                });
+                                return messageString;
+                            })
+                            .join('\n');
+                    })
+                    .join('\n\n') || '';
         }
 
-        // const getRecentInteractions = async (
-        //     userA: UUID,
-        //     userB: UUID,
-        // ): Promise<Memory[]> => {
-        //     // Find all rooms where userA and userB are participants
-        //     const rooms = await this.databaseAdapter.getRoomsForParticipants([
-        //         userA,
-        //         userB,
-        //     ]);
-        //
-        //     // Check the existing memories in the database
-        //     return this.messageManager.getMemoriesByRoomIds({
-        //         // filter out the current room id from rooms
-        //         roomIds: rooms.filter((room) => room !== roomId),
-        //         limit: 20,
-        //     });
-        // };
-
-        // const recentInteractions =
-        //     userId !== this.agentId
-        //         ? await getRecentInteractions(userId, this.agentId)
-        //         : [];
-
-        // const getRecentMessageInteractions = async (
-        //     recentInteractionsData: Memory[],
-        // ): Promise<string> => {
-        //     // Format the recent messages
-        //     const formattedInteractions = await Promise.all(
-        //         recentInteractionsData.map(async (message) => {
-        //             const isSelf = message.userId === this.agentId;
-        //             let sender: string;
-        //             if (isSelf) {
-        //                 sender = this.character.name;
-        //             } else {
-        //                 const accountId =
-        //                     await this.databaseAdapter.getAccountById(
-        //                         message.userId,
-        //                     );
-        //                 sender = accountId?.username || "unknown";
-        //             }
-        //             return `${sender}: ${message.content.text}`;
-        //         }),
-        //     );
-        //
-        //     return formattedInteractions.join("\n");
-        // };
-
-        // const formattedMessageInteractions =
-        //     await getRecentMessageInteractions(recentInteractions);
-
-        // const getRecentPostInteractions = async (
-        //     recentInteractionsData: Memory[],
-        //     actors: Actor[],
-        // ): Promise<string> => {
-        //     const formattedInteractions = formatPosts({
-        //         messages: recentInteractionsData,
-        //         actors,
-        //         conversationHeader: true,
-        //     });
-        //
-        //     return formattedInteractions;
-        // };
-
-        // const formattedPostInteractions = await getRecentPostInteractions(
-        //     recentInteractions,
-        //     actorsData,
-        // );
-
         // if bio is a string, use it. if its an array, pick one at random
-        let bio = this.character.bio || "";
+        let bio = this.character.bio || '';
         if (Array.isArray(bio)) {
             // get three random bio strings and join them with " "
             bio = bio
                 .sort(() => 0.5 - Math.random())
                 .slice(0, 3)
-                .join(" ");
+                .join(' ');
         }
 
         // let knowledgeData = [];
         let formattedKnowledge = this.character.knowledge
             .filter((item): item is string => typeof item === 'string')
             .join('\n\n');
-
-        // if (this.character.settings?.ragKnowledge) {
-        //     const recentContext = recentMessagesData
-        //         .slice(-3) // Last 3 messages
-        //         .map((msg) => msg.content.text)
-        //         .join(" ");
-        //
-        //     knowledgeData = await this.ragKnowledgeManager.getKnowledge({
-        //         query: message.content.text,
-        //         conversationContext: recentContext,
-        //         limit: 5,
-        //     });
-        //
-        //     formattedKnowledge = formatKnowledge(knowledgeData);
-        // } else {
-        //     knowledgeData = await knowledge.get(this, message);
-        //
-        //     formattedKnowledge = formatKnowledge(knowledgeData);
-        // }
 
         const initialState = {
             agentId: this.agentId,
@@ -1500,17 +1379,8 @@ Text: ${attachment.text}
                               Math.random() * this.character.adjectives.length,
                           )
                       ]
-                    : "",
+                    : '',
             knowledge: formattedKnowledge,
-            // knowledgeData: knowledgeData,
-            // ragKnowledgeData: knowledgeData,
-            // Recent interactions between the sender and receiver, formatted as messages
-            // recentMessageInteractions: formattedMessageInteractions,
-            // Recent interactions between the sender and receiver, formatted as posts
-            // recentPostInteractions: formattedPostInteractions,
-            // Raw memory[] array of interactions
-            // recentInteractionsData: recentInteractions,
-            // randomly pick one topic
             topic:
                 this.character.topics && this.character.topics.length > 0
                     ? this.character.topics[
@@ -1527,181 +1397,80 @@ Text: ${attachment.text}
                           .slice(0, 5)
                           .map((topic, index, array) => {
                               if (index === array.length - 2) {
-                                  return topic + " and ";
+                                  return topic + ' and ';
                               }
                               // if last topic, don't add a comma
                               if (index === array.length - 1) {
                                   return topic;
                               }
-                              return topic + ", ";
+                              return topic + ', ';
                           })
-                          .join("")
-                    : "",
+                          .join('')
+                    : '',
             characterPostExamples:
                 formattedCharacterPostExamples &&
-                formattedCharacterPostExamples.replaceAll("\n", "").length > 0
+                formattedCharacterPostExamples.replaceAll('\n', '').length > 0
                     ? addHeader(
                           `# Example Posts for ${this.character.name}`,
                           formattedCharacterPostExamples,
                       )
-                    : "",
+                    : '',
             characterMessageExamples:
                 formattedCharacterMessageExamples &&
-                formattedCharacterMessageExamples.replaceAll("\n", "").length >
+                formattedCharacterMessageExamples.replaceAll('\n', '').length >
                     0
                     ? addHeader(
                           `# Example Conversations for ${this.character.name}`,
                           formattedCharacterMessageExamples,
                       )
-                    : "",
+                    : '',
             messageDirections:
                 this.character?.style?.all?.length > 0 ||
                 this.character?.style?.chat.length > 0
                     ? addHeader(
-                          "# Message Directions for " + this.character.name,
+                          '# Message Directions for ' + this.character.name,
                           (() => {
                               const all = this.character?.style?.all || [];
                               const chat = this.character?.style?.chat || [];
-                              return [...all, ...chat].join("\n");
+                              return [...all, ...chat].join('\n');
                           })(),
                       )
-                    : "",
-
+                    : '',
             postDirections:
                 this.character?.style?.all?.length > 0 ||
                 this.character?.style?.post.length > 0
                     ? addHeader(
-                          "# Post Directions for " + this.character.name,
+                          '# Post Directions for ' + this.character.name,
                           (() => {
                               const all = this.character?.style?.all || [];
                               const post = this.character?.style?.post || [];
-                              return [...all, ...post].join("\n");
+                              return [...all, ...post].join('\n');
                           })(),
                       )
-                    : "",
-
-            //old logic left in for reference
-            //food for thought. how could we dynamically decide what parts of the character to add to the prompt other than random? rag? prompt the llm to decide?
-            /*
-            postDirections:
-                this.character?.style?.all?.length > 0 ||
-                this.character?.style?.post.length > 0
-                    ? addHeader(
-                            "# Post Directions for " + this.character.name,
-                            (() => {
-                                const all = this.character?.style?.all || [];
-                                const post = this.character?.style?.post || [];
-                                const shuffled = [...all, ...post].sort(
-                                    () => 0.5 - Math.random()
-                                );
-                                return shuffled
-                                    .slice(0, conversationLength / 2)
-                                    .join("\n");
-                            })()
-                        )
-                    : "",*/
-            // Agent runtime stuff
+                    : '',
             senderName,
             actors:
                 actors && actors.length > 0
-                    ? addHeader("# Actors", actors)
-                    : "",
+                    ? addHeader('# Actors', actors)
+                    : '',
             actorsData,
             roomId,
-            // goals:
-            //     goals && goals.length > 0
-            //         ? addHeader(
-            //               "# Goals\n{{agentName}} should prioritize accomplishing the objectives that are in progress.",
-            //               goals,
-            //           )
-            //         : "",
-            // goalsData,
             recentMessages:
                 recentMessages && recentMessages.length > 0
-                    ? addHeader("# Conversation Messages", recentMessages)
-                    : "",
+                    ? addHeader('# Conversation Messages', recentMessages)
+                    : '',
             recentPosts:
                 recentPosts && recentPosts.length > 0
-                    ? addHeader("# Posts in Thread", recentPosts)
-                    : "",
+                    ? addHeader('# Posts in Thread', recentPosts)
+                    : '',
             recentMessagesData,
             attachments:
                 formattedAttachments && formattedAttachments.length > 0
-                    ? addHeader("# Attachments", formattedAttachments)
-                    : "",
+                    ? addHeader('# Attachments', formattedAttachments)
+                    : '',
             ...additionalKeys,
         } as State;
-
-        const actionPromises = this.actions.map(async (action: Action) => {
-            const result = await action.validate(this, message, initialState);
-            if (result) {
-                return action;
-            }
-            return null;
-        });
-        const resolvedActions =  await Promise.all(actionPromises);
-        const actionsData = resolvedActions.filter(Boolean) as Action[];
-
-        // const evaluatorPromises = this.evaluators.map(async (evaluator) => {
-        //     const result = await evaluator.validate(
-        //         this,
-        //         message,
-        //         initialState,
-        //     );
-        //     if (result) {
-        //         return evaluator;
-        //     }
-        //     return null;
-        // });
-
-        // const [resolvedEvaluators, resolvedActions, providers] =
-        //     await Promise.all([
-        //         Promise.all(evaluatorPromises),
-        //         Promise.all(actionPromises),
-        //         getProviders(this, message, initialState),
-        //     ]);
-
-        // const evaluatorsData = resolvedEvaluators.filter(
-        //     Boolean,
-        // ) as Evaluator[];
-
-        const actionState = {
-            actionNames:
-                "Possible response actions: " + formatActionNames(actionsData),
-            actions:
-                actionsData.length > 0
-                    ? addHeader(
-                          "# Available Actions",
-                          formatActions(actionsData),
-                      )
-                    : "",
-            actionExamples:
-                actionsData.length > 0
-                    ? addHeader(
-                          "# Action Examples",
-                          composeActionExamples(actionsData, 30),
-                      )
-                    : "",
-            // evaluatorsData,
-            // evaluators:
-            //     evaluatorsData.length > 0
-            //         ? formatEvaluators(evaluatorsData)
-            //         : "",
-            // evaluatorNames:
-            //     evaluatorsData.length > 0
-            //         ? formatEvaluatorNames(evaluatorsData)
-            //         : "",
-            // evaluatorExamples:
-            //     evaluatorsData.length > 0
-            //         ? formatEvaluatorExamples(evaluatorsData)
-            //         : "",
-            // providers: addHeader(
-            //     `# Additional Information About ${this.character.name} and The World`,
-            //     providers,
-            // ),
-        };
-
-        return { ...initialState, ...actionState } as State;
+        return { ...initialState } as State;
     }
 
     async updateRecentMessageState(state: State): Promise<State> {
@@ -1756,12 +1525,12 @@ Description: ${attachment.description}
 Text: ${attachment.text}
     `,
             )
-            .join("\n");
+            .join('\n');
 
         return {
             ...state,
             recentMessages: addHeader(
-                "# Conversation Messages",
+                '# Conversation Messages',
                 recentMessages,
             ),
             recentMessagesData,
@@ -1781,5 +1550,31 @@ Text: ${attachment.text}
 const formatKnowledge = (knowledge: KnowledgeItem[]) => {
     return knowledge
         .map((knowledge) => `- ${knowledge.content.text}`)
-        .join("\n");
+        .join('\n');
 };
+
+const systemPromptTemplate = `
+## Action Specification:
+Name: {{functionCallSpecName}}
+Description: {{functionCallSpecDescription}}
+Parameters:
+{{parameters}}
+`;
+
+function formatActionSystemPrompt(action: Action) {
+    const { name: actionName, description, functionCallSpec } = action;
+
+    const functionCallSpecName = action.name;
+    const strict = functionCallSpec.strict;
+    const additionalProperties = functionCallSpec.additionalProperties;
+    const functionCallSpecDescription = functionCallSpec.description;
+    const parameters = Object.entries(functionCallSpec.parameters.properties)
+        .map(([key, value]) => `${key}: ${value.type} - ${value.description}`)
+        .join('\n');
+
+    return systemPromptTemplate
+        .replace('{{description}}', description)
+        .replace('{{functionCallSpecName}}', functionCallSpecName)
+        .replace('{{functionCallSpecDescription}}', functionCallSpecDescription)
+        .replace('{{parameters}}', parameters);
+}
