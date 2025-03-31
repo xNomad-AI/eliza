@@ -103,7 +103,7 @@ export async function* handleUserMessage(
             displayType: DisplayType.AGENT_STATUS
         }
     }
-    for (let stepCnt = 0; stepCnt < 1; stepCnt++) {
+    for (let stepCnt = 0; stepCnt < 5; stepCnt++) {
         let shouldReturn = false;
         let actionResponseMessage = null as Content | null;
         if (stepCnt === 0 && stream) {
@@ -182,10 +182,13 @@ export async function* handleUserMessage(
                 shouldReturn = true;
             }
         }
-        yield {
-            ...actionResponseMessage,
-            displayType: DisplayType.AGENT_RESPONSE
-        };
+        if (actionResponseMessage.action != 'WRAP_UP' || stepCnt == 0){
+            yield {
+                ...actionResponseMessage,
+                displayType: DisplayType.AGENT_RESPONSE
+            };
+        }
+
         task_record.pastActions.push({
             action:
                 actionDetail.action === 'none'
