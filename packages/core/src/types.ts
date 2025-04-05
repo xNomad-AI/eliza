@@ -415,6 +415,7 @@ export type Handler = (
     callback?: HandlerCallback,
 ) => Promise<unknown>;
 
+
 /**
  * Callback function type for handlers
  */
@@ -453,6 +454,9 @@ export interface Action {
 
     /** Validation function */
     validate: Validator;
+
+    /** Format function */
+    formatParameters?: (runtime: IAgentRuntime, parameters: any, callback?: HandlerCallback) => Promise<any>;
 
     /** Whether to suppress the initial message when this action is used */
     suppressInitialMessage?: boolean;
@@ -1335,7 +1339,7 @@ export interface IAgentRuntime {
 
     // Methods
     getConversationLength(): number;
-
+    
     processActions(
         message: Memory,
         responses: Memory[],
@@ -1343,7 +1347,7 @@ export interface IAgentRuntime {
         callback?: HandlerCallback,
     ): Promise< (boolean | ActionStatus) []>;
 
-
+    formatActionParameters(action_name: string, parameters: any, callback?: HandlerCallback): Promise<any>;
     evaluate(
         message: Memory,
         state?: State,
