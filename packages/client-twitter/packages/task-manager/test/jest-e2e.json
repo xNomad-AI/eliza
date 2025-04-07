@@ -1,0 +1,17 @@
+{
+  "preset": "@shelf/jest-mongodb",
+  "testEnvironment": "node",
+  "testMatch": [
+    "**/test/**/*.e2e-spec.ts"
+  ],
+  "transform": {
+    "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "moduleFileExtensions": [
+    "js",
+    "json",
+    "ts"
+  ],
+  "coverageDirectory": "./coverage",
+  "testTimeout": 30000
+}

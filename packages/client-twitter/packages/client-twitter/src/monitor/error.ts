@@ -1,0 +1,3 @@
+interface TwitterConfigValidationError {
+  message: string;
+}

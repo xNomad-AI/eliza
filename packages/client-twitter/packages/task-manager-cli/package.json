@@ -1,0 +1,28 @@
+{
+  "name": "@xnomad/task-manager-cli",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "start": "nest start",
+    "build": "tsup --format esm --dts",
+    "generate": "swagger-typescript-api generate -p http://localhost:3000/api/docs-json -r --unwrap-response-data --module-name-index 1 --extract-response-body -o src -n api.ts --custom-config generator/custom-config.cjs --axios --modular",
+    "debug": "tsup debug/*.ts && node dist/debug.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.9"
+  },
+  "devDependencies": {
+    "tsup": "8.3.5",
+    "swagger-typescript-api": "^13.0.23",
+    "typescript": "5.7.3"
+  },
+  "keywords": [],
+  "packageManager": "pnpm@9.15.2",
+  "author": "",
+  "license": "MIT"
+}
