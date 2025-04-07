@@ -1,0 +1,17 @@
+{
+    "testEnvironment": "node",
+    "extensionsToTreatAsEsm": [".ts"],
+    "transform": {
+        "^.+\\.tsx?$": [
+            "ts-jest",
+            {
+                "useESM": true,
+                "tsconfig": {
+                    "module": "esnext",
+                    "target": "esnext",
+                    "moduleResolution": "bundler"
+                }
+            }
+        ]
+    }
+}

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build": {
+      "outputs": [
+        "dist/**"
+      ],
+      "dependsOn": [
+        "^build"
+      ]
+    },
+    "@elizaos/client-twitter#build": {
+      "outputs": ["dist/**"],
+      "dependsOn": ["@xnomad/task-manager-cli#build"]
+    },
+    "@xnomad/task-manager-cli#build": {
+      "outputs": ["dist/**"],
+      "dependsOn": []
+    },
+    "@xnomad/task-manager#build": {
+      "outputs": ["dist/**"],
+      "dependsOn": ["@elizaos/client-twitter#build", "@xnomad/task-manager-cli#build"]
+    }
+  }
+}

@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:4.4
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    restart: always
+    environment:
+      - MONGO_REPL_SET_NAME=rs0
+    command: >
+      bash -c "
+        mongod --replSet rs0 --bind_ip 0.0.0.0 --bind_ip_all &
+        sleep 5 &&
+        mongo mongodb:27017 --eval 'rs.initiate()' &&
+        wait"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "rs.status()"]
+      start_period: 5s
+      interval: 5s
+      retries: 10
+      timeout: 30s
+
+networks:
+  client_twitter_local:
+    driver: bridge
+
+volumes:
+  mongo_data:
+    driver: local
