@@ -3,3 +3,5 @@ packages:
     - "packages/*"
     - "client"
     - "agent"
+    - "packages/client-twitter/packages/*"
+    - "!packages/client-twitter"
