@@ -571,7 +571,7 @@ export class AgentRuntime implements IAgentRuntime {
         // client have a start
         for (const cStr in this.clients) {
             const c = this.clients[cStr];
-            elizaLogger.log(
+            elizaLogger.info(
                 'runtime::stop - requesting',
                 cStr,
                 'client stop for',
