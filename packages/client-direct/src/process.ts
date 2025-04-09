@@ -90,22 +90,26 @@ export async function* handleUserMessage(
 ) {
     const { roomId, agentId, userId, content } = memory;
     let state = await runtime.composeState(memory, {});
+    
+    if (stream) {
+        yield {
+            text: 'Connected',
+            displayType: DisplayType.AGENT_STATUS
+        }
+    }
+
     let task_record = await getTaskRecord(
         runtime,
         content.text,
         roomId,
         agentId,
         userId,
-    );
-    if (stream){
-        yield {
-            text: 'Connected',
-            displayType: DisplayType.AGENT_STATUS
-        }
-    }
-    for (let stepCnt = 0; stepCnt < 1; stepCnt++) {
+        );
+    for (let stepCnt = 0; stepCnt < 5; stepCnt++) {
+        console.log('task_record', JSON.stringify(task_record));
         let shouldReturn = false;
         let actionResponseMessage = null as Content | null;
+        let actionsProcessResult = [];
         if (stepCnt === 0 && stream) {
             yield {
                 text: 'Detecting action',
@@ -150,38 +154,80 @@ export async function* handleUserMessage(
             embedding: getEmbeddingZeroVector(),
             createdAt: Date.now(),
         };
-
+        
+        let finalParameters = actionDetail.parameters;
         if (actionDetail.action === 'WRAP_UP') {
             actionResponseMessage = { text: actionDetail.parameters.message, action: actionDetail.action };
             shouldReturn = true;
         } else {
-            if (stream && actionDetail.action && !['wrap_up', 'none', 'general_chat'].includes(actionDetail.action.toLowerCase())){
+            if (stream && actionDetail.action && !['wrap_up', 'none', 'general_chat'].includes(actionDetail.action.toLowerCase())) {
                 yield {
                     text: `Processing Action: ${actionDetail.action}`,
                     displayType: DisplayType.AGENT_ACTION
                 }
             }
-            const actionsProcessResult = await runtime.processActions(
-                memory,
-                [agentRouterResponseMemory],
-                await runtime.composeState(memory, {
-                    agentName: runtime.character.name,
-                    actionParameters: actionDetail.parameters,
-                }),
-                async (actionResponse) => {
-                    actionResponseMessage = actionResponse;
-                    return [memory];
-                }
-            );
-            shouldReturn = actionsProcessResult.some(
-                (processResult) => processResult != 'success',
-            );
-
-            // GENERAL CHAT
-            if (actionDetail.action === 'none') {
+            // if success, the formatResult will be the formatted parameters; else, the formatResult.parameters will be the original parameters
+            const formatResult = await runtime.formatActionParameters(actionDetail.action, actionDetail.parameters, async (actionResponse) => {
+                actionResponseMessage = actionResponse;
+                return [memory];
+            });
+            console.log('formatResult', formatResult);
+            console.log('actionResponseMessage', actionResponseMessage);
+            finalParameters = formatResult.parameters;
+            // check if the action parameters are incomplete, if so, ask user to provide more information
+            if (formatResult.status === 'incomplete info') {
                 shouldReturn = true;
+            } else {
+                const lastAction = task_record.pastActions.at(-1);
+                // Check if this is the same action as the last one
+                let pendingConfirmation = false;
+                if (lastAction && 
+                    lastAction.action === actionDetail.action && 
+                    lastAction.status === 'pending') {
+                    console.log('lastAction is pending', lastAction);
+                    // Assume actions are the same until we find a difference
+                    pendingConfirmation = true;
+                    
+                    // Compare parameters
+                    for (const key in formatResult.parameters) {
+                        const currentParam = formatResult.parameters[key];
+                        const lastParam = lastAction.parameters[key];
+                        // If parameters are different, actions are not the same
+                        if (JSON.stringify(currentParam) !== JSON.stringify(lastParam)) {
+                            pendingConfirmation = false;
+                            console.log('mismatch', currentParam, lastParam);
+                            break;
+                        }
+                    }
+                }
+                actionsProcessResult = await runtime.processActions(
+                    memory,
+                    [agentRouterResponseMemory],
+                    await runtime.composeState(memory, {
+                        agentName: runtime.character.name,
+                        actionParameters: {
+                          ...formatResult.parameters,
+                          pendingConfirmation
+                        },
+                    }),
+                    async (actionResponse) => {
+                        actionResponseMessage = actionResponse;
+                        return [memory];
+                    }
+                );
+                shouldReturn = actionsProcessResult.some(
+                    (processResult) => processResult != 'success',
+                );
+                
+
+                // GENERAL CHAT
+                if (actionDetail.action === 'none') {
+                    shouldReturn = true;
+                }
             }
         }
+        actionResponseMessage.action = actionDetail.action === 'none' ? 'WRAP_UP' : actionDetail.action;
+        actionResponseMessage.parameters = finalParameters;
         yield {
             ...actionResponseMessage,
             displayType: DisplayType.AGENT_RESPONSE
@@ -191,8 +237,10 @@ export async function* handleUserMessage(
                 actionDetail.action === 'none'
                     ? 'WRAP_UP'
                     : actionDetail.action,
+            parameters: finalParameters,
             detail: actionDetail.explanation,
             result: actionResponseMessage?.result || actionResponseMessage?.text,
+            status: actionsProcessResult[0] || 'failed',
         });
         const resMemory: Memory = {
             id: stringToUuid(Date.now().toString()),
@@ -205,44 +253,45 @@ export async function* handleUserMessage(
         };
         state = await runtime.updateRecentMessageState(state);
         await runtime.messageManager.createMemory(resMemory, true);
-
+        console.log('task_record upsert to db', task_record);
+        runtime.databaseAdapter.upsert?.('tasks', task_record);
+        console.log('task_record upsert to db done');
         if (shouldReturn === true) {
             break;
         }
     }
-    runtime.databaseAdapter.upsert?.('tasks', task_record);
 }
 
 async function getChatHistory(
-    runtime: IAgentRuntime,
-    roomId: UUID,
-): Promise<
-    {
-        role: string;
-        content: string;
-        attachment?: Media;
-        idx: number;
-    }[]
-> {
-    // get recent messages
-    const recentMessages = await runtime.messageManager.getMemories({
-        roomId,
-        count: 5,
-        unique: false,
-    });
-    // convert into the request format of agent-router
-    return recentMessages
-        .slice()
-        .reverse()
-        .map((msg, idx) => {
-            const role = msg.userId === runtime.agentId ? 'assistant' : 'user';
-            return {
-                role,
-                content: msg.content.text || '',
-                attachments: msg.content.attachments,
-                idx: idx,
-            };
+        runtime: IAgentRuntime,
+        roomId: UUID,
+    ): Promise<
+        {
+            role: string;
+            content: string;
+            attachment?: Media;
+            idx: number;
+        }[]
+    > {
+        // get recent messages
+        const recentMessages = await runtime.messageManager.getMemories({
+            roomId,
+            count: 5,
+            unique: false,
         });
+        // convert into the request format of agent-router
+        return recentMessages
+            .slice()
+            .reverse()
+            .map((msg, idx) => {
+                const role = msg.userId === runtime.agentId ? 'assistant' : 'user';
+                return {
+                    role,
+                    content: msg.content.text || '',
+                    attachments: msg.content.attachments,
+                    idx: idx,
+                };
+            });
 }
 
 async function getTaskRecord(
@@ -315,5 +364,13 @@ async function getNextAction(
         );
         throw new Error(`HTTP error! status: ${response.status}`);
     }
-    return await response.json();
+
+    // deal with null parameters
+    const jsonResponse = await response.json();
+    for (const key in jsonResponse.parameters) {
+        if (jsonResponse.parameters[key] === null || jsonResponse.parameters[key] === undefined || jsonResponse.parameters[key] === '' || jsonResponse.parameters[key] === 'None') {
+            jsonResponse.parameters[key] = null;
+        }
+    }
+    return jsonResponse;
 }
