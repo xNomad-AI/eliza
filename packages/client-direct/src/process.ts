@@ -97,7 +97,7 @@ export async function* handleUserMessage(
             displayType: DisplayType.AGENT_STATUS
         }
     }
-    for (let stepCnt = 0; stepCnt < 1; stepCnt++) {
+    for (let stepCnt = 0; stepCnt < 5; stepCnt++) {
         let task_record = await getTaskRecord(
         runtime,
         content.text,
@@ -105,7 +105,7 @@ export async function* handleUserMessage(
         agentId,
         userId,
         );
-        console.log('task_record', task_record);
+        console.log('task_record', JSON.stringify(task_record));
         let shouldReturn = false;
         let actionResponseMessage = null as Content | null;
         let actionsProcessResult = [];
@@ -153,7 +153,8 @@ export async function* handleUserMessage(
             embedding: getEmbeddingZeroVector(),
             createdAt: Date.now(),
         };
-
+        
+        let finalParameters = actionDetail.parameters;
         if (actionDetail.action === 'WRAP_UP') {
             actionResponseMessage = { text: actionDetail.parameters.message, action: actionDetail.action };
             shouldReturn = true;
@@ -171,7 +172,7 @@ export async function* handleUserMessage(
             });
             console.log('formatResult', formatResult);
             console.log('actionResponseMessage', actionResponseMessage);
-
+            finalParameters = formatResult.parameters;
             // check if the action parameters are incomplete, if so, ask user to provide more information
             if (formatResult.status === 'incomplete info') {
                 shouldReturn = true;
@@ -223,43 +224,44 @@ export async function* handleUserMessage(
                     shouldReturn = true;
                 }
             }
-            actionResponseMessage.action = actionDetail.action === 'none' ? 'WRAP_UP' : actionDetail.action;
-            yield {
-                ...actionResponseMessage,
-                displayType: DisplayType.AGENT_RESPONSE
-            };
-            task_record.pastActions.push({
-                action:
-                    actionDetail.action === 'none'
-                        ? 'WRAP_UP'
-                        : actionDetail.action,
-                parameters: formatResult.parameters,
-                detail: actionDetail.explanation,
-                result: actionResponseMessage?.result || actionResponseMessage?.text,
-                status: actionsProcessResult[0] || 'failed',
-            });
-            const resMemory: Memory = {
-                id: stringToUuid(Date.now().toString()),
-                roomId,
-                userId: runtime.agentId,
-                agentId,
-                content: actionResponseMessage,
-                embedding: getEmbeddingZeroVector(),
-                createdAt: Date.now(),
-            };
-            state = await runtime.updateRecentMessageState(state);
-            await runtime.messageManager.createMemory(resMemory, true);
-            console.log('task_record upsert to db', task_record);
-            runtime.databaseAdapter.upsert?.('tasks', task_record);
-            console.log('task_record upsert to db done');
-            if (shouldReturn === true) {
-                break;
-            }
         }
-        
+        actionResponseMessage.action = actionDetail.action === 'none' ? 'WRAP_UP' : actionDetail.action;
+        actionResponseMessage.parameters = finalParameters;
+        yield {
+            ...actionResponseMessage,
+            displayType: DisplayType.AGENT_RESPONSE
+        };
+        task_record.pastActions.push({
+            action:
+                actionDetail.action === 'none'
+                    ? 'WRAP_UP'
+                    : actionDetail.action,
+            parameters: finalParameters,
+            detail: actionDetail.explanation,
+            result: actionResponseMessage?.result || actionResponseMessage?.text,
+            status: actionsProcessResult[0] || 'failed',
+        });
+        const resMemory: Memory = {
+            id: stringToUuid(Date.now().toString()),
+            roomId,
+            userId: runtime.agentId,
+            agentId,
+            content: actionResponseMessage,
+            embedding: getEmbeddingZeroVector(),
+            createdAt: Date.now(),
+        };
+        state = await runtime.updateRecentMessageState(state);
+        await runtime.messageManager.createMemory(resMemory, true);
+        console.log('task_record upsert to db', task_record);
+        runtime.databaseAdapter.upsert?.('tasks', task_record);
+        console.log('task_record upsert to db done');
+        if (shouldReturn === true) {
+            break;
+        }
     }
+}
 
-    async function getChatHistory(
+async function getChatHistory(
         runtime: IAgentRuntime,
         roomId: UUID,
     ): Promise<
@@ -289,78 +291,85 @@ export async function* handleUserMessage(
                     idx: idx,
                 };
             });
-    }
+}
 
-    async function getTaskRecord(
-        runtime: IAgentRuntime,
-        text: string,
-        roomId: string,
-        agentId: string,
-        userId: string,
-    ) {
-        // query tasks
-        let task_record = {
-            roomId,
-            agentId,
-            userId,
-            taskId: 0,
-            taskDefinition: text,
-            pastActions: [],
-        };
-        const result = await runtime.databaseAdapter.queryLatestTask?.('tasks', {
-            roomId,
-            agentId,
-            userId,
-        });
-        const lastestTask = result?.[0];
-        if (lastestTask?.pastActions?.at(-1)?.action === 'WRAP_UP') {
-            task_record.taskId = lastestTask.taskId + 1;
-        } else if (lastestTask) {
-            task_record = lastestTask;
-        }
-        return task_record;
+async function getTaskRecord(
+    runtime: IAgentRuntime,
+    text: string,
+    roomId: string,
+    agentId: string,
+    userId: string,
+) {
+    // query tasks
+    let task_record = {
+        roomId,
+        agentId,
+        userId,
+        taskId: 0,
+        taskDefinition: text,
+        pastActions: [],
+    };
+    const result = await runtime.databaseAdapter.queryLatestTask?.('tasks', {
+        roomId,
+        agentId,
+        userId,
+    });
+    const lastestTask = result?.[0];
+    if (lastestTask?.pastActions?.at(-1)?.action === 'WRAP_UP') {
+        task_record.taskId = lastestTask.taskId + 1;
+    } else if (lastestTask) {
+        task_record = lastestTask;
     }
+    return task_record;
+}
 
-    async function getNextAction(
-        runtime: IAgentRuntime,
-        taskRecord: any,
-        chatHistory: any[],
-        switchedTask: boolean = false,
-    ): Promise<{
-        action: string;
-        text: string;
-        parameters: any;
-        explanation: string;
-    }> {
-        // call agent router to get response
-        const body: any = {
-            chain: runtime.getSetting('NFT_CHAIN'),
-            chat_history: chatHistory,
-            task_definition: taskRecord.taskDefinition,
-            past_steps: taskRecord?.pastActions || [],
-            switched_task: switchedTask,
-        };
-        console.log('get next action request', JSON.stringify(body));
-        body.actions = runtime.actions.map((action) => {
-            return action.functionCallSpec;
-        });
-        const response = await fetch(
-            runtime.getSetting('AGENT_ROUTER_URL') + '/plan',
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(body),
+async function getNextAction(
+    runtime: IAgentRuntime,
+    taskRecord: any,
+    chatHistory: any[],
+    switchedTask: boolean = false,
+): Promise<{
+    action: string;
+    text: string;
+    parameters: any;
+    explanation: string;
+}> {
+    // call agent router to get response
+    const body: any = {
+        chain: runtime.getSetting('NFT_CHAIN'),
+        chat_history: chatHistory,
+        task_definition: taskRecord.taskDefinition,
+        past_steps: taskRecord?.pastActions || [],
+        switched_task: switchedTask,
+    };
+    console.log('get next action request', JSON.stringify(body));
+    body.actions = runtime.actions.map((action) => {
+        return action.functionCallSpec;
+    });
+    const response = await fetch(
+        runtime.getSetting('AGENT_ROUTER_URL') + '/plan',
+        {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
             },
+            body: JSON.stringify(body),
+        },
+    );
+    if (response.status !== 200) {
+        elizaLogger.error(
+            'Error in agent router response',
+            await response.text(),
         );
-        if (response.status !== 200) {
-            elizaLogger.error(
-                'Error in agent router response',
-                await response.text(),
-            );
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return await response.json();
+        throw new Error(`HTTP error! status: ${response.status}`);
     }
+
+    // deal with null parameters
+    const jsonResponse = await response.json();
+    for (const key in jsonResponse.parameters) {
+        if (jsonResponse.parameters[key] === null || jsonResponse.parameters[key] === undefined || jsonResponse.parameters[key] === '' || jsonResponse.parameters[key] === 'None') {
+            jsonResponse.parameters[key] = null;
+        }
+    }
+    return jsonResponse;
 }
