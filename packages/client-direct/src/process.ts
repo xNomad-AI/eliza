@@ -97,14 +97,15 @@ export async function* handleUserMessage(
             displayType: DisplayType.AGENT_STATUS
         }
     }
-    for (let stepCnt = 0; stepCnt < 5; stepCnt++) {
-        let task_record = await getTaskRecord(
+
+    let task_record = await getTaskRecord(
         runtime,
         content.text,
         roomId,
         agentId,
         userId,
         );
+    for (let stepCnt = 0; stepCnt < 5; stepCnt++) {
         console.log('task_record', JSON.stringify(task_record));
         let shouldReturn = false;
         let actionResponseMessage = null as Content | null;
