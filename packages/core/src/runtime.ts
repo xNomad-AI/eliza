@@ -1046,6 +1046,33 @@ export class AgentRuntime implements IAgentRuntime {
         return actionsProcessResult;
     }
 
+
+    /**
+     * Format the action parameters
+     */
+    async formatActionParameters(action_name: string, parameters: any, callback?: HandlerCallback) {
+        const action = this.actions.find(a => a.name === action_name);
+        if (!action) {
+            elizaLogger.error(`Action ${action_name} not found`);
+            callback?.({
+                text: `Action ${action_name} not found`,
+                isError: true,
+            });
+            return {status: 'failed', parameters};
+        }
+        if (action.formatParameters) {
+            const formatResult = await action.formatParameters(this, parameters, callback);
+            return formatResult;
+        } else {
+            callback?.({
+                text: `Action ${action_name} does not have a formatParameters function`,
+                isError: true,
+            });
+            return {status: 'failed', parameters};
+        }
+    }
+
+
     /**
      * Evaluate the message and state using the registered evaluators.
      * @param message The message to evaluate.
