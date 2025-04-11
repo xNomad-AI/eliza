@@ -242,24 +242,29 @@ export async function* handleUserMessage(
             result: actionResponseMessage?.result || actionResponseMessage?.text,
             status: actionsProcessResult[0] || 'failed',
         });
-        const resMemory: Memory = {
-            id: stringToUuid(Date.now().toString()),
-            roomId,
-            userId: runtime.agentId,
-            agentId,
-            content: actionResponseMessage,
+
+        // skip replying to user if the action is WRAP_UP
+        if (actionDetail.action !== 'WRAP_UP') {
+            const resMemory: Memory = {
+                id: stringToUuid(Date.now().toString()),
+                roomId,
+                userId: runtime.agentId,
+                agentId,
+                content: actionResponseMessage,
             embedding: getEmbeddingZeroVector(),
-            createdAt: Date.now(),
-        };
-        state = await runtime.updateRecentMessageState(state);
-        await runtime.messageManager.createMemory(resMemory, true);
-        console.log('task_record upsert to db', task_record);
-        runtime.databaseAdapter.upsert?.('tasks', task_record);
-        console.log('task_record upsert to db done');
+                createdAt: Date.now(),
+            };
+            state = await runtime.updateRecentMessageState(state);
+            await runtime.messageManager.createMemory(resMemory, true);
+        }
+        
         if (shouldReturn === true) {
             break;
         }
     }
+    console.log('task_record upsert to db', JSON.stringify(task_record));
+    runtime.databaseAdapter.upsert?.('tasks', task_record);
+    console.log('task_record upsert to db done');
 }
 
 async function getChatHistory(
@@ -315,6 +320,7 @@ async function getTaskRecord(
         agentId,
         userId,
     });
+    console.log('result from get task record', result);
     const lastestTask = result?.[0];
     if (lastestTask?.pastActions?.at(-1)?.action === 'WRAP_UP') {
         task_record.taskId = lastestTask.taskId + 1;
